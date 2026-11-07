@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["s0_cc","s0_cdc", "s0_codec","s0_const", "s0_fs", "s0_peer", "s0_profile", "s0_region", "s0_udp", "s0_wire", "sync0"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = ""
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = false
+incremental = false
+
+[profile.release.package.s0_cc]
+opt-level = 3
+
+[profile.release.package.s0_cdc]
+opt-level = 3
+
+[profile.release.package.s0_codec]
+opt-level = 3
+
+[profile.release.package.s0_udp]
+opt-level = 3
+
+[profile.release.package.blake3]
+opt-level = 3
+
+[profile.release.package.gxhash]
+opt-level = 3
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

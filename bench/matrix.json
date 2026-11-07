@@ -1,0 +1,112 @@
+{
+  "updated": "2026-11-07",
+  "platforms": [
+    "linux-x64",
+    "linux-arm64",
+    "macos",
+    "windows"
+  ],
+  "pairwise": [
+    {
+      "from": "linux-x64",
+      "to": "linux-arm64",
+      "stack": "IPv6",
+      "sync0_mbps": 311,
+      "rsync_mbps": 121.5,
+      "ratio": 2.5596707818930042
+    },
+    {
+      "from": "linux-x64",
+      "to": "macos",
+      "stack": "IPv6",
+      "sync0_mbps": 268.4,
+      "rsync_mbps": 108.2,
+      "ratio": 2.4805914972273566
+    },
+    {
+      "from": "linux-x64",
+      "to": "windows",
+      "stack": "IPv4",
+      "sync0_mbps": 234.6,
+      "rsync_mbps": 91.5,
+      "ratio": 2.5639344262295083
+    },
+    {
+      "from": "linux-arm64",
+      "to": "linux-x64",
+      "stack": "IPv6",
+      "sync0_mbps": 296.9,
+      "rsync_mbps": 115,
+      "ratio": 2.5817391304347823
+    },
+    {
+      "from": "linux-arm64",
+      "to": "macos",
+      "stack": "IPv6",
+      "sync0_mbps": 256.5,
+      "rsync_mbps": 104.4,
+      "ratio": 2.456896551724138
+    },
+    {
+      "from": "linux-arm64",
+      "to": "windows",
+      "stack": "IPv4",
+      "sync0_mbps": 226.2,
+      "rsync_mbps": 88.6,
+      "ratio": 2.5530474040632054
+    },
+    {
+      "from": "macos",
+      "to": "linux-x64",
+      "stack": "IPv6",
+      "sync0_mbps": 264,
+      "rsync_mbps": 107.8,
+      "ratio": 2.4489795918367347
+    },
+    {
+      "from": "macos",
+      "to": "linux-arm64",
+      "stack": "IPv6",
+      "sync0_mbps": 258.2,
+      "rsync_mbps": 103.1,
+      "ratio": 2.504364694471387
+    },
+    {
+      "from": "macos",
+      "to": "windows",
+      "stack": "IPv4",
+      "sync0_mbps": 221.4,
+      "rsync_mbps": 86,
+      "ratio": 2.574418604651163
+    },
+    {
+      "from": "windows",
+      "to": "linux-x64",
+      "stack": "IPv4",
+      "sync0_mbps": 229.8,
+      "rsync_mbps": 89.9,
+      "ratio": 2.5561735261401557
+    },
+    {
+      "from": "windows",
+      "to": "linux-arm64",
+      "stack": "IPv4",
+      "sync0_mbps": 222.7,
+      "rsync_mbps": 86.4,
+      "ratio": 2.577546296296296
+    },
+    {
+      "from": "windows",
+      "to": "macos",
+      "stack": "IPv4",
+      "sync0_mbps": 218.5,
+      "rsync_mbps": 84.8,
+      "ratio": 2.5766509433962264
+    }
+  ],
+  "pairGeo": {
+    "sync0_mbps": 249.04,
+    "rsync_mbps": 98.21,
+    "ratio": 2.54
+  }
+}

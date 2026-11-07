@@ -1,0 +1,29 @@
+[package]
+name = "s0_udp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+compio = { version = "0.19.2", features = ["net", "time", "runtime", "io"] }
+gxhash = "3.5.0"
+itoa = "1.0.18"
+jiff = "0.2.39"
+log = "0.4.35"
+s0_cc = { version = "0.1.0", path = "../s0_cc" }
+s0_cdc = { version = "0.1.0", path = "../s0_cdc" }
+s0_codec = { version = "0.1.0", path = "../s0_codec" }
+s0_const = { version = "0.1.0", path = "../s0_const" }
+s0_fs = { version = "0.1.0", path = "../s0_fs" }
+s0_wire = { version = "0.1.0", path = "../s0_wire" }
+socket2 = "0.6.5"
+thiserror = "2.0.21"
+zmij = "1.0.23"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+fastrand = "2.5.0"
+log_init = "0.1.40"
+tempfile = "3.27.0"

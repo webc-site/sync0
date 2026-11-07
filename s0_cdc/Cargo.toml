@@ -1,0 +1,21 @@
+[package]
+name = "s0_cdc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+blake3 = "1.8.7"
+gxhash = "3.5.0"
+s0_const = { version = "0.1.0", path = "../s0_const" }
+s0_wire = { version = "0.1.0", path = "../s0_wire" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+fastrand = "2.5.0"
+log = "0.4.35"
+log_init = "0.1.40"
+tempfile = "3.27.0"

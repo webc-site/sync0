@@ -1,0 +1,19 @@
+[package]
+name = "s0_wire"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+s0_const = { version = "0.1.0", path = "../s0_const" }
+s0_region = { version = "0.1.0", path = "../s0_region" }
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+fastrand = "2.5.0"
+log = "0.4.35"
+log_init = "0.1.40"
