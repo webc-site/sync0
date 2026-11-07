@@ -1,0 +1,33 @@
+about: Peer-to-peer sinhronizacija datoteka i alati za distribuciju sa više čvorova
+send_about: Pošaljite datoteku ili direktorij
+recv_about: primati datoteku ili direktorij
+id_about: ID javnog ključa izlaznog čvora
+profile_about: Generirajte i potpišite vizit karte ličnog čvora
+share_about: objaviti zajednički direktorij
+pull_about: Povucite zajednički direktorij iz čvora
+push_about: Gurnite direktorij na čvor
+sub_about: Pretplatite se na ažuriranja kataloga i pomozite u distribuciji
+group_about: Pridružite se grupi za dvosmjernu sinhronizaciju s više čvorova
+arg_file_or_dir: Datoteka ili direktorij za slanje
+arg_peer_addr: adresa ciljnog čvora
+arg_listen_addr: adresa slušanja
+arg_out_path: Putanja izlazne datoteke ili direktorija
+arg_rate: Ograničenje brzine (bajtovi/sekundi)
+arg_delete: Izbrišite suvišne fajlove na prijemnoj strani
+arg_quiet: tihi način rada
+arg_share_name: Podijelite ime
+arg_local_dir: lokalni imenik
+arg_dst_dir: ciljni direktorij
+arg_src_dir: izvorni direktorij
+arg_peer_addrs_csv: Lista adresa čvorova (odvojenih zarezima)
+arg_origin_addr: Adresa izvornog čvora
+arg_subpath: Prefiks putanje poddirektorijuma
+arg_auth: Omogućite autentifikaciju pristupa
+arg_group_name: Ime grupe
+arg_config: Ključ i direktorij konfiguracije
+arg_name: korisničko ime
+arg_region: Pozivni broj grada ili područja
+arg_email: Kontakt email
+arg_url: Lični URL
+arg_bio: Personalizovani potpis (maksimalno 256 karaktera)
+err_prefix: greška

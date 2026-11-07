@@ -1,0 +1,33 @@
+about: Tools für Peer-to-Peer-Dateisynchronisierung und Multi-Knoten-Verteilung
+send_about: Senden Sie eine Datei oder ein Verzeichnis
+recv_about: Datei oder Verzeichnis empfangen
+id_about: ID des öffentlichen Schlüssels des Ausgabeknotens
+profile_about: Erstellen und signieren Sie persönliche Knoten-Visitenkarten
+share_about: Freigegebenes Verzeichnis veröffentlichen
+pull_about: Freigegebenes Verzeichnis vom Knoten abrufen
+push_about: Verzeichnis zum Knoten verschieben
+sub_about: Abonnieren Sie Katalogaktualisierungen und helfen Sie bei der Verteilung
+group_about: Treten Sie einer bidirektionalen Synchronisierungsgruppe mit mehreren Knoten bei
+arg_file_or_dir: Zu sendende Datei oder Verzeichnis
+arg_peer_addr: Zielknotenadresse
+arg_listen_addr: Höradresse
+arg_out_path: Ausgabedatei oder Verzeichnispfad
+arg_rate: Ratenbegrenzung (Byte/Sekunde)
+arg_delete: Löschen Sie überflüssige Dateien auf der Empfängerseite
+arg_quiet: Silent-Modus
+arg_share_name: Geben Sie den Namen frei
+arg_local_dir: lokales Verzeichnis
+arg_dst_dir: Zielverzeichnis
+arg_src_dir: Quellverzeichnis
+arg_peer_addrs_csv: Liste der Knotenadressen (durch Kommas getrennt)
+arg_origin_addr: Quellknotenadresse
+arg_subpath: Präfix des Unterverzeichnispfads
+arg_auth: Aktivieren Sie die Zugriffsauthentifizierung
+arg_group_name: Gruppenname
+arg_config: Schlüssel- und Konfigurationsverzeichnis
+arg_name: Benutzername
+arg_region: Stadt- oder Ortsvorwahl
+arg_email: Kontakt-E-Mail
+arg_url: Persönliche URL
+arg_bio: Personalisierte Signatur (maximal 256 Zeichen)
+err_prefix: Fehler

@@ -1,0 +1,33 @@
+about: Peer-to-peer file synchronization ug multi-node distribution tools
+send_about: Pagpadala usa ka file o direktoryo
+recv_about: makadawat file o direktoryo
+id_about: Output node public key ID
+profile_about: Paghimo ug pagpirma sa mga personal nga node nga business card
+share_about: imantala ang gipaambit nga direktoryo
+pull_about: Kuhaa ang gipaambit nga direktoryo gikan sa node
+push_about: Iduso ang direktoryo sa node
+sub_about: Mag-subscribe sa mga update sa katalogo ug pagtabang sa pag-apod-apod
+group_about: Apil sa multi-node two-way synchronization nga grupo
+arg_file_or_dir: File o direktoryo nga ipadala
+arg_peer_addr: target nga node address
+arg_listen_addr: adres sa pagpaminaw
+arg_out_path: Output file o direktoryo nga agianan
+arg_rate: Limitasyon sa rate (bytes/segundo)
+arg_delete: Pagtangtang sa sobra nga mga file sa nakadawat nga tumoy
+arg_quiet: silent mode
+arg_share_name: Ipakigbahin ang ngalan
+arg_local_dir: lokal nga direktoryo
+arg_dst_dir: target nga direktoryo
+arg_src_dir: tinubdan nga direktoryo
+arg_peer_addrs_csv: Listahan sa mga adres sa node (gibulag sa koma)
+arg_origin_addr: Tinubdan nga node address
+arg_subpath: Prefix sa agianan sa subdirectory
+arg_auth: I-enable ang access authentication
+arg_group_name: Ngalan sa grupo
+arg_config: Key ug configuration directory
+arg_name: username
+arg_region: Code sa siyudad o area
+arg_email: Kontak email
+arg_url: Personal nga URL
+arg_bio: Personal nga pirma (maximum nga 256 ka karakter)
+err_prefix: sayop

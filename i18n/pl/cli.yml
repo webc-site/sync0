@@ -1,0 +1,33 @@
+about: Narzędzia do synchronizacji plików peer-to-peer i dystrybucji na wielu węzłach
+send_about: Wyślij plik lub katalog
+recv_about: odbierz plik lub katalog
+id_about: Identyfikator klucza publicznego węzła wyjściowego
+profile_about: Generuj i podpisuj osobiste wizytówki węzła
+share_about: publikuj udostępniony katalog
+pull_about: Wyciągnij współdzielony katalog z węzła
+push_about: Prześlij katalog do węzła
+sub_about: Subskrybuj aktualizacje katalogu i pomagaj w dystrybucji
+group_about: Dołącz do wielowęzłowej grupy synchronizacji dwukierunkowej
+arg_file_or_dir: Plik lub katalog do wysłania
+arg_peer_addr: adres węzła docelowego
+arg_listen_addr: adres słuchania
+arg_out_path: Ścieżka pliku wyjściowego lub katalogu
+arg_rate: Limit szybkości (bajty/sekundę)
+arg_delete: Usuń zbędne pliki po stronie odbiorczej
+arg_quiet: tryb cichy
+arg_share_name: Udostępnij nazwę
+arg_local_dir: katalog lokalny
+arg_dst_dir: katalog docelowy
+arg_src_dir: katalog źródłowy
+arg_peer_addrs_csv: Lista adresów węzłów (oddzielonych przecinkami)
+arg_origin_addr: Adres węzła źródłowego
+arg_subpath: Prefiks ścieżki podkatalogu
+arg_auth: Włącz uwierzytelnianie dostępu
+arg_group_name: Nazwa grupy
+arg_config: Katalog kluczy i konfiguracji
+arg_name: nazwa użytkownika
+arg_region: Miasto lub numer kierunkowy
+arg_email: Adres e-mail do kontaktu
+arg_url: Osobisty adres URL
+arg_bio: Spersonalizowany podpis (maksymalnie 256 znaków)
+err_prefix: błąd

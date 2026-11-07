@@ -1,0 +1,33 @@
+about: P2P 파일 동기화 및 다중 노드 배포 도구
+send_about: 파일이나 디렉터리 보내기
+recv_about: 파일 또는 디렉토리 수신
+id_about: 출력 노드 공개 키 ID
+profile_about: 개인 노드 명함 생성 및 서명
+share_about: 공유 디렉터리 게시
+pull_about: 노드에서 공유 디렉터리 가져오기
+push_about: 디렉터리를 노드로 푸시
+sub_about: 카탈로그 업데이트를 구독하고 배포를 지원하세요
+group_about: 다중 노드 양방향 동기화 그룹에 가입
+arg_file_or_dir: 전송할 파일 또는 디렉터리
+arg_peer_addr: 대상 노드 주소
+arg_listen_addr: 청취 주소
+arg_out_path: 출력 파일 또는 디렉터리 경로
+arg_rate: 비율 제한(바이트/초)
+arg_delete: 수신측에서 중복된 파일 삭제
+arg_quiet: 무음 모드
+arg_share_name: 공유 이름
+arg_local_dir: 로컬 디렉토리
+arg_dst_dir: 대상 디렉터리
+arg_src_dir: 소스 디렉토리
+arg_peer_addrs_csv: 노드 주소 목록(쉼표로 구분)
+arg_origin_addr: 소스 노드 주소
+arg_subpath: 하위 디렉터리 경로 접두어
+arg_auth: 액세스 인증 활성화
+arg_group_name: 그룹 이름
+arg_config: 키 및 구성 디렉터리
+arg_name: 사용자 이름
+arg_region: 도시 또는 지역번호
+arg_email: 연락처 이메일
+arg_url: 개인 URL
+arg_bio: 개인 서명(최대 256자)
+err_prefix: 실수

@@ -1,4 +1,5 @@
 *.rlib
+.cache/
 .codegraph/
 node_modules/
 target/

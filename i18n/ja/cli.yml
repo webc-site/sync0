@@ -1,0 +1,33 @@
+about: ピアツーピアファイル同期およびマルチノード分散ツール
+send_about: ファイルまたはディレクトリを送信する
+recv_about: ファイルまたはディレクトリを受信する
+id_about: ノード公開鍵IDを出力する
+profile_about: 個人ノードの名刺を生成して署名する
+share_about: 共有ディレクトリを公開する
+pull_about: ノードから共有ディレクトリをプルする
+push_about: ディレクトリをノードにプッシュする
+sub_about: カタログの更新を購読し、配布を支援します
+group_about: マルチノード双方向同期グループに参加する
+arg_file_or_dir: 送信するファイルまたはディレクトリ
+arg_peer_addr: ターゲットノードアドレス
+arg_listen_addr: リスニングアドレス
+arg_out_path: 出力ファイルまたはディレクトリのパス
+arg_rate: レート制限 (バイト/秒)
+arg_delete: 受信側で冗長なファイルを削除する
+arg_quiet: サイレントモード
+arg_share_name: 共有名
+arg_local_dir: ローカルディレクトリ
+arg_dst_dir: ターゲットディレクトリ
+arg_src_dir: ソースディレクトリ
+arg_peer_addrs_csv: ノードアドレスのリスト (カンマ区切り)
+arg_origin_addr: 送信元ノードアドレス
+arg_subpath: サブディレクトリパスプレフィックス
+arg_auth: アクセス認証を有効にする
+arg_group_name: グループ名
+arg_config: キーと設定ディレクトリ
+arg_name: ユーザー名
+arg_region: 市外局番
+arg_email: 連絡先メールアドレス
+arg_url: 個人用URL
+arg_bio: パーソナライズされた署名 (最大 256 文字)
+err_prefix: 間違い

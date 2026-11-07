@@ -1,0 +1,21 @@
+[package]
+name = "s0_cc"
+description = "sync0 时延梯度拥塞控制、非对称自适应 RTT 与 3x 抗反射放大算法库（sans-IO）"
+readme = "../../README.md"
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log_init = "0.1.40"

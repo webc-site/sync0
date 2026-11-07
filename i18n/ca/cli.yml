@@ -1,0 +1,33 @@
+about: Eines de sincronització de fitxers peer-to-peer i distribució de diversos nodes
+send_about: Envia un fitxer o directori
+recv_about: rebre fitxer o directori
+id_about: ID de clau pública del node de sortida
+profile_about: Generar i signar targetes de visita de nodes personals
+share_about: publicar un directori compartit
+pull_about: Traieu el directori compartit del node
+push_about: Envieu el directori al node
+sub_about: Subscriu-te a les actualitzacions del catàleg i ajuda amb la distribució
+group_about: Uniu-vos a un grup de sincronització bidireccional multinode
+arg_file_or_dir: Fitxer o directori a enviar
+arg_peer_addr: adreça del node objectiu
+arg_listen_addr: adreça d'escolta
+arg_out_path: Fitxer de sortida o ruta del directori
+arg_rate: Límit de velocitat (bytes/segon)
+arg_delete: Suprimiu els fitxers redundants a l'extrem receptor
+arg_quiet: mode silenciós
+arg_share_name: Comparteix el nom
+arg_local_dir: directori local
+arg_dst_dir: directori de destinació
+arg_src_dir: directori font
+arg_peer_addrs_csv: Llista d'adreces de nodes (separades per comes)
+arg_origin_addr: Adreça del node font
+arg_subpath: Prefix de ruta del subdirectori
+arg_auth: Activa l'autenticació d'accés
+arg_group_name: Nom del grup
+arg_config: Clau i directori de configuració
+arg_name: nom d'usuari
+arg_region: Prefix de ciutat o zona
+arg_email: Correu electrònic de contacte
+arg_url: URL personal
+arg_bio: Signatura personalitzada (màxim 256 caràcters)
+err_prefix: error

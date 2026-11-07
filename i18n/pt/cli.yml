@@ -1,0 +1,33 @@
+about: Sincronização de arquivos ponto a ponto e ferramentas de distribuição de vários nós
+send_about: Envie um arquivo ou diretório
+recv_about: receber arquivo ou diretório
+id_about: ID da chave pública do nó de saída
+profile_about: Gere e assine cartões de visita de nós pessoais
+share_about: publicar diretório compartilhado
+pull_about: Extrair diretório compartilhado do nó
+push_about: Enviar diretório para o nó
+sub_about: Assine as atualizações do catálogo e ajude na distribuição
+group_about: Junte-se a um grupo de sincronização bidirecional de vários nós
+arg_file_or_dir: Arquivo ou diretório a ser enviado
+arg_peer_addr: endereço do nó de destino
+arg_listen_addr: endereço de escuta
+arg_out_path: Arquivo de saída ou caminho do diretório
+arg_rate: Limite de taxa (bytes/segundo)
+arg_delete: Exclua arquivos redundantes no destinatário
+arg_quiet: modo silencioso
+arg_share_name: Compartilhar nome
+arg_local_dir: diretório local
+arg_dst_dir: diretório de destino
+arg_src_dir: diretório de origem
+arg_peer_addrs_csv: Lista de endereços de nós (separados por vírgula)
+arg_origin_addr: Endereço do nó de origem
+arg_subpath: Prefixo do caminho do subdiretório
+arg_auth: Habilitar autenticação de acesso
+arg_group_name: Nome do grupo
+arg_config: Diretório de chave e configuração
+arg_name: nome de usuário
+arg_region: Cidade ou código de área
+arg_email: E-mail de contato
+arg_url: URL pessoal
+arg_bio: Assinatura personalizada (máximo 256 caracteres)
+err_prefix: erro

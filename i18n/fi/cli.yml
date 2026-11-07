@@ -1,0 +1,33 @@
+about: Peer-to-peer tiedostojen synkronointi ja usean solmun jakelutyökalut
+send_about: Lähetä tiedosto tai hakemisto
+recv_about: vastaanottaa tiedosto tai hakemisto
+id_about: Lähtösolmun julkisen avaimen tunnus
+profile_about: Luo ja allekirjoita henkilökohtaisia ​​solmujen käyntikortteja
+share_about: julkaista jaettu hakemisto
+pull_about: Vedä jaettu hakemisto solmusta
+push_about: Työnnä hakemisto solmuun
+sub_about: Tilaa luettelopäivitykset ja auta jakelussa
+group_about: Liity monisolmun kaksisuuntaiseen synkronointiryhmään
+arg_file_or_dir: Lähetettävä tiedosto tai hakemisto
+arg_peer_addr: kohdesolmun osoite
+arg_listen_addr: kuunteluosoite
+arg_out_path: Tulostustiedosto tai hakemistopolku
+arg_rate: Nopeusrajoitus (tavua/sekunti)
+arg_delete: Poista ylimääräiset tiedostot vastaanottavasta päästä
+arg_quiet: hiljainen tila
+arg_share_name: Jaa nimi
+arg_local_dir: paikallinen hakemisto
+arg_dst_dir: kohdehakemisto
+arg_src_dir: lähdehakemisto
+arg_peer_addrs_csv: Luettelo solmuosoitteista (pilkuilla erotettuna)
+arg_origin_addr: Lähdesolmun osoite
+arg_subpath: Alihakemistopolun etuliite
+arg_auth: Ota käyttöön käyttöoikeustodennus
+arg_group_name: Ryhmän nimi
+arg_config: Avain- ja määrityshakemisto
+arg_name: käyttäjätunnus
+arg_region: Kaupunki tai suuntanumero
+arg_email: Yhteydenotto sähköposti
+arg_url: Henkilökohtainen URL-osoite
+arg_bio: Henkilökohtainen allekirjoitus (enintään 256 merkkiä)
+err_prefix: virhe

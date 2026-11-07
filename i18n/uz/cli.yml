@@ -1,0 +1,33 @@
+about: Peer-to-peer fayl sinxronizatsiyasi va ko'p tugunli tarqatish vositalari
+send_about: Fayl yoki katalogni yuboring
+recv_about: fayl yoki katalogni qabul qilish
+id_about: Chiqish tugunining umumiy kalit identifikatori
+profile_about: Shaxsiy tugun biznes kartalarini yarating va imzolang
+share_about: umumiy katalogni nashr qilish
+pull_about: Umumiy katalogni tugundan tortib oling
+push_about: Katalogni tugunga surish
+sub_about: Katalog yangilanishlariga obuna bo'ling va tarqatishda yordam bering
+group_about: Ko'p tugunli ikki tomonlama sinxronizatsiya guruhiga qo'shiling
+arg_file_or_dir: Yuboriladigan fayl yoki katalog
+arg_peer_addr: maqsadli tugun manzili
+arg_listen_addr: tinglash manzili
+arg_out_path: Chiqish fayli yoki katalog yo'li
+arg_rate: Tezlik chegarasi (bayt/sekund)
+arg_delete: Qabul qiluvchi tomonda keraksiz fayllarni o'chiring
+arg_quiet: jim rejim
+arg_share_name: Ulashish nomi
+arg_local_dir: mahalliy katalog
+arg_dst_dir: maqsadli katalog
+arg_src_dir: manba katalogi
+arg_peer_addrs_csv: Tugun manzillari ro'yxati (vergul bilan ajratilgan)
+arg_origin_addr: Manba tugun manzili
+arg_subpath: Kichik katalog yo'li prefiksi
+arg_auth: Kirish autentifikatsiyasini yoqing
+arg_group_name: Guruh nomi
+arg_config: Kalit va konfiguratsiya katalogi
+arg_name: foydalanuvchi nomi
+arg_region: Shahar yoki hudud kodi
+arg_email: Aloqa elektron pochtasi
+arg_url: Shaxsiy URL
+arg_bio: Shaxsiy imzo (maksimal 256 belgi)
+err_prefix: xato

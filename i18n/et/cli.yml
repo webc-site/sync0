@@ -1,0 +1,33 @@
+about: Peer-to-peer failide sünkroonimise ja mitme sõlmega levitamise tööriistad
+send_about: Saada fail või kataloog
+recv_about: saada fail või kataloog
+id_about: Väljundsõlme avaliku võtme ID
+profile_about: Looge ja allkirjastage isiklikke sõlme visiitkaarte
+share_about: avaldada jagatud kataloog
+pull_about: Tõmmake jagatud kataloog sõlmest
+push_about: Lükake kataloog sõlme
+sub_about: Tellige kataloogi värskendused ja abistage levitamist
+group_about: Liituge mitme sõlmega kahesuunalise sünkroonimisrühmaga
+arg_file_or_dir: Saatmiseks fail või kataloog
+arg_peer_addr: sihtsõlme aadress
+arg_listen_addr: kuulamisaadress
+arg_out_path: Väljundfaili või kataloogi tee
+arg_rate: Kiiruse limiit (baiti sekundis)
+arg_delete: Kustutage vastuvõtvas otsas üleliigsed failid
+arg_quiet: vaikne režiim
+arg_share_name: Jaga nimi
+arg_local_dir: kohalik kataloog
+arg_dst_dir: sihtkataloog
+arg_src_dir: lähtekataloog
+arg_peer_addrs_csv: Sõlmede aadresside loend (komadega eraldatud)
+arg_origin_addr: Lähtesõlme aadress
+arg_subpath: Alamkataloogi tee eesliide
+arg_auth: Luba juurdepääsu autentimine
+arg_group_name: Grupi nimi
+arg_config: Võtme ja konfiguratsioonikataloog
+arg_name: kasutajanimi
+arg_region: Linna või piirkonna kood
+arg_email: Kontaktmeiliaadress
+arg_url: Isiklik URL
+arg_bio: Isikupärastatud allkiri (maksimaalselt 256 tähemärki)
+err_prefix: viga

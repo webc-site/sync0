@@ -1,0 +1,33 @@
+about: Peer-to-peer file synchronization and multi-node distribution tools
+send_about: Send a file or directory
+recv_about: Receive File or Directory
+id_about: Output node public key ID
+profile_about: Generate and sign personal node business cards
+share_about: Publish Shared Directory
+pull_about: Pull shared directory from node
+push_about: Push directory to node
+sub_about: Subscribe to catalog updates and assist with distribution
+group_about: Join a multi-node two-way synchronization group
+arg_file_or_dir: File or directory to be sent
+arg_peer_addr: Target Node Address
+arg_listen_addr: Listening Address
+arg_out_path: Output file or directory path
+arg_rate: Rate limit (bytes/second)
+arg_delete: Delete redundant files on the receiving end
+arg_quiet: Silent Mode
+arg_share_name: Share name
+arg_local_dir: Local Directory
+arg_dst_dir: Target Directory
+arg_src_dir: Source Directory
+arg_peer_addrs_csv: List of node addresses (comma separated)
+arg_origin_addr: Source node address
+arg_subpath: Subdirectory path prefix
+arg_auth: Enable access authentication
+arg_group_name: Group name
+arg_config: Key and configuration directory
+arg_name: Username
+arg_region: City or area code
+arg_email: Contact email
+arg_url: Personal URL
+arg_bio: Personalized signature (maximum 256 characters)
+err_prefix: Mistake

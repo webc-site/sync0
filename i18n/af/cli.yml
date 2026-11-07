@@ -1,0 +1,33 @@
+about: Eweknie-lêersinchronisasie en multi-node verspreiding gereedskap
+send_about: Stuur 'n lêer of gids
+recv_about: ontvang lêer of gids
+id_about: Uitvoer nodus publieke sleutel ID
+profile_about: Genereer en teken persoonlike nodusbesigheidskaartjies
+share_about: publiseer gedeelde gids
+pull_about: Trek gedeelde gids vanaf nodus
+push_about: Druk gids na nodus
+sub_about: Teken in op katalogusopdaterings en help met verspreiding
+group_about: Sluit aan by 'n multi-node tweerigting-sinchronisasiegroep
+arg_file_or_dir: Lêer of gids wat gestuur moet word
+arg_peer_addr: teiken nodus adres
+arg_listen_addr: luister adres
+arg_out_path: Uitvoerlêer of gidspad
+arg_rate: Tarieflimiet (grepe/sekonde)
+arg_delete: Vee oortollige lêers aan die ontvangkant uit
+arg_quiet: stil modus
+arg_share_name: Deel naam
+arg_local_dir: plaaslike gids
+arg_dst_dir: teiken gids
+arg_src_dir: bron gids
+arg_peer_addrs_csv: Lys van nodus-adresse (komma-geskei)
+arg_origin_addr: Bron nodus adres
+arg_subpath: Subgids pad voorvoegsel
+arg_auth: Aktiveer toegangstawing
+arg_group_name: Groepnaam
+arg_config: Sleutel en konfigurasie gids
+arg_name: gebruikernaam
+arg_region: Stad of area kode
+arg_email: Kontak e-pos
+arg_url: Persoonlike URL
+arg_bio: Gepersonaliseerde handtekening (maksimum 256 karakters)
+err_prefix: fout

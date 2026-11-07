@@ -1,0 +1,33 @@
+about: ການຊິ້ງຂໍ້ມູນໄຟລ໌ແບບ Peer-to-peer ແລະເຄື່ອງມືແຈກຢາຍຫຼາຍຂໍ້
+send_about: ສົ່ງໄຟລ໌ຫຼືໄດເລກະທໍລີ
+recv_about: ຮັບໄຟລ໌ຫຼືໄດເລກະທໍລີ
+id_about: Output node ID ລະຫັດສາທາລະນະ
+profile_about: ສ້າງແລະເຊັນນາມບັດນາມບັດສ່ວນບຸກຄົນ
+share_about: ເຜີຍແຜ່ລາຍຊື່ທີ່ແບ່ງປັນ
+pull_about: ດຶງລາຍຊື່ທີ່ແບ່ງປັນຈາກ node
+push_about: ຍູ້ໄດເລກະທໍລີໄປຫາ node
+sub_about: ຈອງການອັບເດດລາຍການ ແລະຊ່ວຍແຈກຢາຍ
+group_about: ເຂົ້າຮ່ວມກຸ່ມ synchronization ສອງທາງຫຼາຍໂຫນດ
+arg_file_or_dir: ໄຟລ໌ຫຼືໄດເລກະທໍລີທີ່ຈະສົ່ງ
+arg_peer_addr: ທີ່ຢູ່ node ເປົ້າຫມາຍ
+arg_listen_addr: ທີ່ຢູ່ການຟັງ
+arg_out_path: ໄຟລ໌ຜົນຜະລິດ ຫຼືເສັ້ນທາງໄດເລກະທໍລີ
+arg_rate: ຂີດຈຳກັດອັດຕາ (ໄບຕ໌/ວິນາທີ)
+arg_delete: ລຶບໄຟລ໌ທີ່ຊ້ຳຊ້ອນຢູ່ໃນຈຸດຮັບ
+arg_quiet: ໂໝດງຽບ
+arg_share_name: ແບ່ງປັນຊື່
+arg_local_dir: ໄດເລກະທໍລີທ້ອງຖິ່ນ
+arg_dst_dir: ໄດເລກະທໍລີເປົ້າຫມາຍ
+arg_src_dir: ແຫຼ່ງທີ່ມາ
+arg_peer_addrs_csv: ລາຍຊື່ທີ່ຢູ່ຂອງ node (ແຍກເຄື່ອງໝາຍຈຸດ)
+arg_origin_addr: ທີ່ຢູ່ node ແຫຼ່ງ
+arg_subpath: ຄຳນຳໜ້າເສັ້ນທາງຍ່ອຍ
+arg_auth: ເປີດໃຊ້ການພິສູດສິດການເຂົ້າເຖິງ
+arg_group_name: ຊື່ກຸ່ມ
+arg_config: ຄີແລະໄດເລກະທໍລີການຕັ້ງຄ່າ
+arg_name: ຊື່ຜູ້ໃຊ້
+arg_region: ລະຫັດເມືອງ ຫຼືເຂດ
+arg_email: ອີເມວຕິດຕໍ່
+arg_url: URL ສ່ວນຕົວ
+arg_bio: ລາຍເຊັນສ່ວນບຸກຄົນ (ສູງສຸດ 256 ຕົວອັກສອນ)
+err_prefix: ຜິດ​ພາດ

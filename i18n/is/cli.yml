@@ -1,0 +1,33 @@
+about: Jafningi-til-jafningi skráarsamstillingu og multi-node dreifingartæki
+send_about: Sendu skrá eða möppu
+recv_about: taka á móti skrá eða skrá
+id_about: Úttakshnútur auðkenni almenningslykils
+profile_about: Búðu til og undirritaðu persónuleg hnúta nafnspjöld
+share_about: birta sameiginlega skrá
+pull_about: Dragðu sameiginlega skrá frá hnút
+push_about: Ýttu möppu að hnút
+sub_about: Gerast áskrifandi að vörulistauppfærslum og aðstoða við dreifingu
+group_about: Skráðu þig í fjölhnúta tvíhliða samstillingarhóp
+arg_file_or_dir: Skrá eða skrá sem á að senda
+arg_peer_addr: heimilisfang hnúts
+arg_listen_addr: hlustunar heimilisfang
+arg_out_path: Úttaksskrá eða möppuslóð
+arg_rate: Hraðamörk (bæti/sekúndu)
+arg_delete: Eyða óþarfa skrám á móttökuendanum
+arg_quiet: hljóðlaus ham
+arg_share_name: Deila nafni
+arg_local_dir: staðbundin skrá
+arg_dst_dir: markskrá
+arg_src_dir: upprunaskrá
+arg_peer_addrs_csv: Listi yfir netföng hnút (aðskilin með kommum)
+arg_origin_addr: Heimilisfang hnúts
+arg_subpath: Forskeyti undirskrárslóðar
+arg_auth: Virkja aðgangsvottun
+arg_group_name: Nafn hóps
+arg_config: Lykill og stillingarskrá
+arg_name: notendanafn
+arg_region: Borg eða svæðisnúmer
+arg_email: Samskiptanetfang
+arg_url: Persónuleg vefslóð
+arg_bio: Persónuleg undirskrift (hámark 256 stafir)
+err_prefix: mistök

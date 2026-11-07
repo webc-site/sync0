@@ -1,0 +1,33 @@
+about: Peer-to-peer fitxategiak sinkronizatzeko eta nodo anitzeko banaketa tresnak
+send_about: Bidali fitxategi edo direktorio bat
+recv_about: jaso fitxategia edo direktorioa
+id_about: Irteerako nodoaren gako publikoaren IDa
+profile_about: Sortu eta sinatu nodo pertsonalen bisita-txartelak
+share_about: direktorio partekatua argitaratu
+pull_about: Atera direktorio partekatua nodotik
+push_about: Bultzatu direktorioa nodora
+sub_about: Harpidetu katalogoaren eguneratzeetara eta lagundu banaketan
+group_about: Sartu nodo anitzeko bi norabideko sinkronizazio talde batean
+arg_file_or_dir: Bidali beharreko fitxategia edo direktorioa
+arg_peer_addr: xede-nodoaren helbidea
+arg_listen_addr: entzuteko helbidea
+arg_out_path: Irteerako fitxategia edo direktorioaren bidea
+arg_rate: Tarifaren muga (byte/segundo)
+arg_delete: Ezabatu erredundanteak fitxategi hartzailean
+arg_quiet: modu isila
+arg_share_name: Partekatu izena
+arg_local_dir: tokiko direktorioa
+arg_dst_dir: xede direktorioa
+arg_src_dir: iturburu direktorioa
+arg_peer_addrs_csv: Nodo helbideen zerrenda (komaz bereizita)
+arg_origin_addr: Iturburu-nodoaren helbidea
+arg_subpath: Azpidirektorioko bide-aurrizkia
+arg_auth: Gaitu sarbide-autentifikazioa
+arg_group_name: Taldearen izena
+arg_config: Gako eta konfigurazio direktorioa
+arg_name: erabiltzaile-izena
+arg_region: Hiria edo eremu-kodea
+arg_email: Harremanetarako posta elektronikoa
+arg_url: URL pertsonala
+arg_bio: Sinadura pertsonalizatua (256 karaktere gehienez)
+err_prefix: akatsa

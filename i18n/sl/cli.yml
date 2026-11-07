@@ -1,0 +1,33 @@
+about: Sinhronizacija datotek enakovrednih in orodja za distribucijo z več vozlišči
+send_about: Pošljite datoteko ali imenik
+recv_about: prejeti datoteko ali imenik
+id_about: ID javnega ključa izhodnega vozlišča
+profile_about: Ustvarite in podpišite osebne vizitke vozlišč
+share_about: objavi skupni imenik
+pull_about: Potegnite skupni imenik iz vozlišča
+push_about: Potisni imenik v vozlišče
+sub_about: Naročite se na posodobitve kataloga in pomagajte pri distribuciji
+group_about: Pridružite se skupini za dvosmerno sinhronizacijo z več vozlišči
+arg_file_or_dir: Datoteka ali imenik za pošiljanje
+arg_peer_addr: naslov ciljnega vozlišča
+arg_listen_addr: prisluhni naslov
+arg_out_path: Izhodna datoteka ali pot imenika
+arg_rate: Omejitev hitrosti (bajtov/sekundo)
+arg_delete: Izbrišite odvečne datoteke na prejemnem koncu
+arg_quiet: tihi način
+arg_share_name: Ime skupne rabe
+arg_local_dir: lokalni imenik
+arg_dst_dir: ciljni imenik
+arg_src_dir: izvorni imenik
+arg_peer_addrs_csv: Seznam naslovov vozlišč (ločeno z vejicami)
+arg_origin_addr: Naslov izvornega vozlišča
+arg_subpath: Predpona poti podimenika
+arg_auth: Omogoči avtentikacijo dostopa
+arg_group_name: Ime skupine
+arg_config: Imenik ključev in konfiguracije
+arg_name: uporabniško ime
+arg_region: Koda mesta ali območja
+arg_email: Kontaktni email
+arg_url: Osebni URL
+arg_bio: Personaliziran podpis (največ 256 znakov)
+err_prefix: napaka

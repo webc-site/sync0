@@ -1,0 +1,33 @@
+about: Mjetet e sinkronizimit të skedarëve peer-to-peer dhe shpërndarjes me shumë nyje
+send_about: Dërgoni një skedar ose drejtori
+recv_about: merrni skedarin ose drejtorinë
+id_about: ID e çelësit publik të nyjës së daljes
+profile_about: Gjeneroni dhe nënshkruani kartat e biznesit të nyjeve personale
+share_about: publikoni drejtorinë e përbashkët
+pull_about: Tërhiq drejtorinë e përbashkët nga nyja
+push_about: Shtyni direktorinë te nyja
+sub_about: Abonohuni në përditësimet e katalogut dhe ndihmoni me shpërndarjen
+group_about: Bashkohuni me një grup sinkronizimi të dyanshëm me shumë nyje
+arg_file_or_dir: Skedari ose drejtoria që do të dërgohet
+arg_peer_addr: adresa e nyjës së synuar
+arg_listen_addr: adresa e dëgjimit
+arg_out_path: Skedari i daljes ose shtegu i drejtorisë
+arg_rate: Kufiri i shpejtësisë (bajt/sekondë)
+arg_delete: Fshini skedarët e tepërt në fundin marrës
+arg_quiet: modaliteti i heshtur
+arg_share_name: Emri i ndarjes
+arg_local_dir: drejtoria lokale
+arg_dst_dir: drejtoria e synuar
+arg_src_dir: drejtoria burimore
+arg_peer_addrs_csv: Lista e adresave të nyjeve (të ndara me presje)
+arg_origin_addr: Adresa e nyjës burimore
+arg_subpath: Prefiksi i rrugës së nëndirektorisë
+arg_auth: Aktivizo vërtetimin e aksesit
+arg_group_name: Emri i grupit
+arg_config: Drejtoria e çelësit dhe konfigurimit
+arg_name: emri i përdoruesit
+arg_region: Kodi i qytetit ose i zonës
+arg_email: Email kontakti
+arg_url: URL personale
+arg_bio: Nënshkrimi i personalizuar (maksimumi 256 karaktere)
+err_prefix: gabim

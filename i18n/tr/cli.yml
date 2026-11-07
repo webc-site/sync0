@@ -1,0 +1,33 @@
+about: Eşler arası dosya senkronizasyonu ve çok düğümlü dağıtım araçları
+send_about: Bir dosya veya dizin gönderme
+recv_about: dosya veya dizin al
+id_about: Çıkış düğümü ortak anahtar kimliği
+profile_about: Kişisel düğüm kartvizitlerini oluşturun ve imzalayın
+share_about: paylaşılan dizini yayınla
+pull_about: Paylaşılan dizini düğümden çekin
+push_about: Dizini düğüme gönder
+sub_about: Katalog güncellemelerine abone olun ve dağıtıma yardımcı olun
+group_about: Çok düğümlü iki yönlü senkronizasyon grubuna katılın
+arg_file_or_dir: Gönderilecek dosya veya dizin
+arg_peer_addr: hedef düğüm adresi
+arg_listen_addr: dinleme adresi
+arg_out_path: Çıkış dosyası veya dizin yolu
+arg_rate: Hız sınırı (bayt/saniye)
+arg_delete: Alıcı taraftaki gereksiz dosyaları silin
+arg_quiet: sessiz mod
+arg_share_name: Paylaşım adı
+arg_local_dir: yerel dizin
+arg_dst_dir: hedef dizin
+arg_src_dir: kaynak dizini
+arg_peer_addrs_csv: Düğüm adreslerinin listesi (virgülle ayrılmış)
+arg_origin_addr: Kaynak düğüm adresi
+arg_subpath: Alt dizin yolu öneki
+arg_auth: Erişim kimlik doğrulamasını etkinleştir
+arg_group_name: Grup adı
+arg_config: Anahtar ve konfigürasyon dizini
+arg_name: kullanıcı adı
+arg_region: Şehir veya alan kodu
+arg_email: İletişim e-postası
+arg_url: Kişisel URL
+arg_bio: Kişiselleştirilmiş imza (maksimum 256 karakter)
+err_prefix: hata

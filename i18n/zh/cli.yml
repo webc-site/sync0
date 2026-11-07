@@ -1,0 +1,33 @@
+about: 对等文件同步与多节点分发工具
+send_about: 发送文件或目录
+recv_about: 接收文件或目录
+id_about: 输出节点公钥 ID
+profile_about: 生成并签名个人节点名片
+share_about: 发布共享目录
+pull_about: 从节点拉取共享目录
+push_about: 向节点推送目录
+sub_about: 订阅目录更新并协助分发
+group_about: 加入多节点双向同步群组
+arg_file_or_dir: 待发送文件或目录
+arg_peer_addr: 目标节点地址
+arg_listen_addr: 监听地址
+arg_out_path: 输出文件或目录路径
+arg_rate: 速率上限 (字节/秒)
+arg_delete: 删除接收端多余文件
+arg_quiet: 静默模式
+arg_share_name: 共享名称
+arg_local_dir: 本地目录
+arg_dst_dir: 目标目录
+arg_src_dir: 源目录
+arg_peer_addrs_csv: 节点地址列表 (逗号分隔)
+arg_origin_addr: 源节点地址
+arg_subpath: 子目录路径前缀
+arg_auth: 启用访问鉴权
+arg_group_name: 群组名称
+arg_config: 密钥与配置目录
+arg_name: 用户名
+arg_region: 所在城市或地区代码
+arg_email: 联系邮箱
+arg_url: 个人网址
+arg_bio: 个性签名 (上限 256 字符)
+err_prefix: 错误

@@ -1,0 +1,33 @@
+about: Cydamseru ffeiliau cyfoedion-i-cyfoedion ac offer dosbarthu aml-nôd
+send_about: Anfonwch ffeil neu gyfeiriadur
+recv_about: derbyn ffeil neu gyfeiriadur
+id_about: ID allwedd gyhoeddus nod allbwn
+profile_about: Cynhyrchu a llofnodi cardiau busnes nodau personol
+share_about: cyhoeddi cyfeiriadur a rennir
+pull_about: Tynnwch y cyfeiriadur a rennir o'r nod
+push_about: Gwthiwch y cyfeiriadur i'r nod
+sub_about: Tanysgrifio i ddiweddariadau catalog a chynorthwyo gyda dosbarthu
+group_about: Ymunwch â grŵp cydamseru dwy ffordd aml-nôd
+arg_file_or_dir: Ffeil neu gyfeiriadur i'w anfon
+arg_peer_addr: cyfeiriad nod targed
+arg_listen_addr: cyfeiriad gwrando
+arg_out_path: Ffeil allbwn neu lwybr cyfeiriadur
+arg_rate: Terfyn cyfradd (beit/eiliad)
+arg_delete: Dileu ffeiliau diangen ar y diwedd derbyn
+arg_quiet: modd tawel
+arg_share_name: Rhannu enw
+arg_local_dir: cyfeiriadur lleol
+arg_dst_dir: cyfeiriadur targed
+arg_src_dir: cyfeiriadur ffynhonnell
+arg_peer_addrs_csv: Rhestr o gyfeiriadau nodau (coma wedi'u gwahanu)
+arg_origin_addr: Cyfeiriad nod ffynhonnell
+arg_subpath: Rhagddodiad llwybr subdirectory
+arg_auth: Galluogi dilysu mynediad
+arg_group_name: Enw grŵp
+arg_config: Cyfeiriadur allwedd a chyfluniad
+arg_name: enw defnyddiwr
+arg_region: Cod dinas neu ardal
+arg_email: E-bost cyswllt
+arg_url: URL personol
+arg_bio: Llofnod personol (uchafswm o 256 nod)
+err_prefix: camgymeriad

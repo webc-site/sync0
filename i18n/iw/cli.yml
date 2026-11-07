@@ -1,0 +1,33 @@
+about: סנכרון קבצים עמית לעמית וכלי הפצה מרובי צמתים
+send_about: שלח קובץ או ספרייה
+recv_about: לקבל קובץ או ספרייה
+id_about: מזהה מפתח ציבורי של צומת פלט
+profile_about: צור וחתום כרטיסי ביקור אישיים של צומת
+share_about: לפרסם ספרייה משותפת
+pull_about: משוך ספרייה משותפת מהצומת
+push_about: דחף את הספרייה לצומת
+sub_about: הירשם לעדכוני קטלוג וסייע בהפצה
+group_about: הצטרף לקבוצת סנכרון דו-כיוונית מרובת צמתים
+arg_file_or_dir: יש לשלוח קובץ או ספריה
+arg_peer_addr: כתובת צומת יעד
+arg_listen_addr: כתובת האזנה
+arg_out_path: נתיב קובץ פלט או ספרייה
+arg_rate: מגבלת קצב (בתים/שנייה)
+arg_delete: מחק קבצים מיותרים בצד המקבל
+arg_quiet: מצב שקט
+arg_share_name: שם שתף
+arg_local_dir: ספרייה מקומית
+arg_dst_dir: ספריית יעד
+arg_src_dir: ספריית מקור
+arg_peer_addrs_csv: רשימת כתובות הצומת (מופרדות בפסיק)
+arg_origin_addr: כתובת צומת המקור
+arg_subpath: קידומת נתיב של ספריית משנה
+arg_auth: אפשר אימות גישה
+arg_group_name: שם הקבוצה
+arg_config: מפתח וספריית תצורה
+arg_name: שם משתמש
+arg_region: עיר או אזור חיוג
+arg_email: אימייל ליצירת קשר
+arg_url: כתובת אתר אישית
+arg_bio: חתימה אישית (מקסימום 256 תווים)
+err_prefix: טָעוּת

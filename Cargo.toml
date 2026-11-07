@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["s0_cc","s0_cdc", "s0_codec","s0_const", "s0_fs", "s0_peer", "s0_profile", "s0_region", "s0_udp", "s0_wire", "sync0"]
+members = ["crate/*"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-repository = ""
+repository = "https://github.com/webc-site/sync0"
 
 [profile.release]
 opt-level = "z"
@@ -21,9 +21,6 @@ incremental = false
 opt-level = 3
 
 [profile.release.package.s0_cdc]
-opt-level = 3
-
-[profile.release.package.s0_codec]
 opt-level = 3
 
 [profile.release.package.s0_udp]

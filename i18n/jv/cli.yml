@@ -1,0 +1,33 @@
+about: Sinkronisasi file peer-to-peer lan alat distribusi multi-node
+send_about: Kirim file utawa direktori
+recv_about: nampa file utawa direktori
+id_about: ID kunci umum simpul output
+profile_about: Nggawe lan mlebu kertu bisnis simpul pribadi
+share_about: nerbitake direktori sing dienggo bareng
+pull_about: Narik direktori sing dienggo bareng saka simpul
+push_about: Push direktori menyang simpul
+sub_about: Langganan nganyari katalog lan bantuan distribusi
+group_about: Gabung karo grup sinkronisasi rong arah multi-node
+arg_file_or_dir: File utawa direktori sing bakal dikirim
+arg_peer_addr: alamat simpul target
+arg_listen_addr: alamat ngrungokake
+arg_out_path: File output utawa path direktori
+arg_rate: Batas tarif (byte/detik)
+arg_delete: Mbusak file keluwih ing mburi panampa
+arg_quiet: mode meneng
+arg_share_name: Nuduhake jeneng
+arg_local_dir: direktori lokal
+arg_dst_dir: direktori target
+arg_src_dir: direktori sumber
+arg_peer_addrs_csv: Dhaptar alamat simpul (koma dipisahake)
+arg_origin_addr: Alamat simpul sumber
+arg_subpath: Awalan path subdirektori
+arg_auth: Aktifake otentikasi akses
+arg_group_name: Jeneng grup
+arg_config: Direktori kunci lan konfigurasi
+arg_name: jeneng panganggo
+arg_region: Kode kutha utawa wilayah
+arg_email: Kontak email
+arg_url: URL pribadi
+arg_bio: Tandha pribadi (maksimal 256 karakter)
+err_prefix: salah

@@ -1,0 +1,33 @@
+about: Sinkronizzazzjoni tal-fajls peer-to-peer u għodod ta 'distribuzzjoni b'ħafna nodi
+send_about: Ibgħat fajl jew direttorju
+recv_about: tirċievi fajl jew direttorju
+id_about: ID taċ-ċavetta pubblika tan-node tal-ħruġ
+profile_about: Iġġenera u tiffirma kards tan-negozju tan-node personali
+share_about: tippubblika direttorju kondiviż
+pull_about: Iġbed direttorju kondiviż minn node
+push_about: Imbotta direttorju għan-node
+sub_about: Abbona għall-aġġornamenti tal-katalgu u tgħin fid-distribuzzjoni
+group_about: Ingħaqad ma 'grupp ta' sinkronizzazzjoni f'żewġ direzzjonijiet b'ħafna nodi
+arg_file_or_dir: Fajl jew direttorju li għandu jintbagħat
+arg_peer_addr: indirizz tan-nodu fil-mira
+arg_listen_addr: indirizz tas-smigħ
+arg_out_path: Fajl tal-ħruġ jew passaġġ tad-direttorju
+arg_rate: Limitu tar-rata (bytes/sekonda)
+arg_delete: Ħassar fajls żejda fuq it-tarf li jirċievi
+arg_quiet: modalità siekta
+arg_share_name: Isem sehem
+arg_local_dir: direttorju lokali
+arg_dst_dir: direttorju fil-mira
+arg_src_dir: direttorju tas-sors
+arg_peer_addrs_csv: Lista ta' indirizzi tan-nodi (separati bil-virgola)
+arg_origin_addr: Indirizz tan-nodu tas-sors
+arg_subpath: Prefiss tal-passaġġ tas-subdirettorju
+arg_auth: Ippermetti l-awtentikazzjoni tal-aċċess
+arg_group_name: Isem tal-grupp
+arg_config: Ċavetta u direttorju tal-konfigurazzjoni
+arg_name: username
+arg_region: Kodiċi tal-belt jew taż-żona
+arg_email: Kuntatt email
+arg_url: URL personali
+arg_bio: Firma personalizzata (massimu 256 karattru)
+err_prefix: żball

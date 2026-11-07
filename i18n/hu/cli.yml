@@ -1,0 +1,33 @@
+about: Peer-to-peer fájlszinkronizálás és több csomópontos terjesztési eszközök
+send_about: Fájl vagy könyvtár küldése
+recv_about: fájl vagy könyvtár fogadása
+id_about: Kimeneti csomópont nyilvános kulcsának azonosítója
+profile_about: Személyes csomópont névjegykártyák létrehozása és aláírása
+share_about: megosztott könyvtár közzététele
+pull_about: Húzza le a megosztott könyvtárat a csomópontból
+push_about: Nyomd meg a könyvtárat a csomóponthoz
+sub_about: Iratkozzon fel a katalógusfrissítésekre, és segítsen a terjesztésben
+group_about: Csatlakozzon egy több csomópontból álló kétirányú szinkronizálási csoporthoz
+arg_file_or_dir: Elküldendő fájl vagy könyvtár
+arg_peer_addr: célcsomópont címe
+arg_listen_addr: hallgatási címet
+arg_out_path: Kimeneti fájl vagy könyvtár elérési útja
+arg_rate: Sebességkorlát (bájt/másodperc)
+arg_delete: Törölje a redundáns fájlokat a fogadó oldalon
+arg_quiet: néma üzemmód
+arg_share_name: Név megosztása
+arg_local_dir: helyi címtár
+arg_dst_dir: célkönyvtár
+arg_src_dir: forráskönyvtár
+arg_peer_addrs_csv: Csomópontcímek listája (vesszővel elválasztva)
+arg_origin_addr: Forrás csomópont címe
+arg_subpath: Az alkönyvtár útvonalának előtagja
+arg_auth: Hozzáférés hitelesítés engedélyezése
+arg_group_name: Csoport neve
+arg_config: Kulcs és konfigurációs könyvtár
+arg_name: felhasználónév
+arg_region: Város vagy körzetszám
+arg_email: Kapcsolattartási e-mail
+arg_url: Személyes URL
+arg_bio: Személyre szabott aláírás (maximum 256 karakter)
+err_prefix: hiba

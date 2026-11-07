@@ -1,0 +1,33 @@
+about: Peer-to-peer bestandssynchronisatie en distributietools voor meerdere knooppunten
+send_about: Verzend een bestand of map
+recv_about: ontvang bestand of map
+id_about: Openbare sleutel-ID van het uitvoerknooppunt
+profile_about: Genereer en onderteken persoonlijke knooppunt-visitekaartjes
+share_about: gedeelde map publiceren
+pull_about: Haal de gedeelde map uit het knooppunt
+push_about: Push map naar knooppunt
+sub_about: Abonneer u op catalogusupdates en help bij de distributie
+group_about: Sluit u aan bij een tweerichtingssynchronisatiegroep met meerdere knooppunten
+arg_file_or_dir: Bestand of directory dat moet worden verzonden
+arg_peer_addr: doelknooppuntadres
+arg_listen_addr: luisteradres
+arg_out_path: Uitvoerbestand of mappad
+arg_rate: Snelheidslimiet (bytes/seconde)
+arg_delete: Verwijder overtollige bestanden aan de ontvangende kant
+arg_quiet: stille modus
+arg_share_name: Naam delen
+arg_local_dir: lokale map
+arg_dst_dir: doelmap
+arg_src_dir: bronmap
+arg_peer_addrs_csv: Lijst met knooppuntadressen (door komma's gescheiden)
+arg_origin_addr: Adres van bronknooppunt
+arg_subpath: Voorvoegsel van submappad
+arg_auth: Schakel toegangsverificatie in
+arg_group_name: Groepsnaam
+arg_config: Sleutel- en configuratiedirectory
+arg_name: gebruikersnaam
+arg_region: Plaats- of netnummer
+arg_email: E-mailadres voor contact
+arg_url: Persoonlijke URL
+arg_bio: Gepersonaliseerde handtekening (maximaal 256 tekens)
+err_prefix: fout
