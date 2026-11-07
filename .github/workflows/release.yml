@@ -1,0 +1,102 @@
+name: Release (.tar.xz Minimized Binaries)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: false
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Release (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bin_name: sync0
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            bin_name: sync0
+          - platform: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            bin_name: sync0
+          - platform: windows-x64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+            bin_name: sync0.exe
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build minimized release binary
+        run: cargo build --release --target ${{ matrix.target }} -p sync0
+
+      - name: Package binary as .tar.xz
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin_name }}" dist/
+          ARCHIVE="sync0-${{ matrix.platform }}.tar.xz"
+          XZ_OPT="-9e" tar -cJf "dist/$ARCHIVE" -C dist "${{ matrix.bin_name }}"
+          rm -f "dist/${{ matrix.bin_name }}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum "$ARCHIVE" > "$ARCHIVE.sha256")
+          else
+            (cd dist && shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256")
+          fi
+          ls -lh dist/
+
+      - name: Upload .tar.xz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            dist/sync0-${{ matrix.platform }}.tar.xz
+            dist/sync0-${{ matrix.platform }}.tar.xz.sha256
+
+  publish:
+    name: Publish GitHub Release
+    needs: build-release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all .tar.xz artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release_assets
+
+      - name: List release assets
+        run: ls -lh release_assets/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag || 'v0.1.0' }}
+          generate_release_notes: true
+          files: |
+            release_assets/*.tar.xz
+            release_assets/*.tar.xz.sha256

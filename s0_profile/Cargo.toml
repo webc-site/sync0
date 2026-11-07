@@ -1,0 +1,20 @@
+[package]
+name = "s0_profile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+coarsetime = "0.1.38"
+ed25519-dalek = "3.0.0"
+s0_const = { version = "0.1.0", path = "../s0_const" }
+s0_region = { version = "0.1.0", path = "../s0_region" }
+s0_wire = { version = "0.1.0", path = "../s0_wire" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log = "0.4.35"
+log_init = "0.1.40"

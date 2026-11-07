@@ -1,0 +1,11 @@
+[term]
+quiet = true
+
+# gxhash 编译期强制要求 AES 指令
+# x86-64-v3 = Haswell(2013)+ / Zen1+，含 AVX2 / BMI2 / SSE4.2
+[target.'cfg(target_arch = "x86_64")']
+rustflags = ["-C", "target-cpu=x86-64-v3", "-C", "target-feature=+aes,+pclmulqdq"]
+
+# Apple M / Graviton / 鲲鹏
+[target.'cfg(target_arch = "aarch64")']
+rustflags = ["-C", "target-feature=+aes,+neon"]
