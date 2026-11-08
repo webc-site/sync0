@@ -6,7 +6,7 @@ use std::{
     atomic::{AtomicBool, Ordering},
   },
   thread,
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use gxhash::HashMap;
@@ -30,6 +30,16 @@ use crate::{
   wire::{P2pReq, P2pResp, SwarmPeer, decode_socket_addrs, encode_socket_addrs},
 };
 
+#[inline]
+fn rtt_weighted_rate(base_rate: u64, rtt_us: u64) -> u64 {
+  let base = if base_rate > 0 {
+    base_rate
+  } else {
+    100_000_000
+  };
+  base.saturating_mul(100_000) / rtt_us.clamp(2_000, 1_000_000)
+}
+
 impl PeerNode {
   /// 从指定 `PeerId` 或其返回的 P2P Swarm 节点群拉取全部或多选的文件/目录 (`Op::Pull = 1`)
   pub fn pull(
@@ -43,7 +53,7 @@ impl PeerNode {
   }
 
   /// 多源并发拉取 (`swarm_pull`)：
-  /// 通过二进制 `PeerId` 连接种子节点并自动通过 PEX 发现组内所有做种节点，按地域亲和度与带宽权重条带化并发拉取 `[blk_lo, blk_hi)`，
+  /// 通过二进制 `PeerId` 连接种子节点并自动通过 PEX 发现组内所有做种节点，按地域亲和度与实测 RTT 反比带宽权重条带化并发拉取 `[blk_lo, blk_hi)`，
   /// 下载过程中实时在后台汇报已校验连续块进展（Leecher Seeding 边下边传）。
   pub fn swarm_pull(
     &self,
@@ -60,43 +70,66 @@ impl PeerNode {
     let sel_paths = opts.resolved_paths();
     let mut candidate_peers: Vec<SwarmPeer> = Vec::new();
     let reused_conns: Mutex<HashMap<PeerId, TcpStream>> = Mutex::new(HashMap::default());
-
-    let (first_res, extra_conns) = if seed_ids.len() == 1 {
-      (
-        self.stat_with_stream(seed_ids[0], share_name, &opts),
-        Vec::new(),
-      )
-    } else {
-      thread::scope(|s| {
-        let first_pid = seed_ids[0];
-        let opts_ref = &opts;
-        let h_first = s.spawn(move || self.stat_with_stream(first_pid, share_name, opts_ref));
-        let h_rest: Vec<_> = seed_ids[1..]
-          .iter()
-          .map(|&pid| s.spawn(move || (pid, self.connect_peer(&pid))))
-          .collect();
-        let first = h_first.join().unwrap_or(Err(PeerError::NoHealthyPeer));
-        let rest: Vec<_> = h_rest.into_iter().filter_map(|h| h.join().ok()).collect();
-        (first, rest)
-      })
-    };
-
+    let mut rtt_map: HashMap<PeerId, u64> = HashMap::default();
     let mut stat_ok = None;
     let mut origin_pid = seed_ids[0];
-    if let Ok((resp, mf, stream)) = first_res {
-      reused_conns.lock().insert(seed_ids[0], stream);
-      stat_ok = Some((resp, mf));
+
+    let stat_claimed = AtomicBool::new(false);
+    let opts_ref = &opts;
+    let outcomes = thread::scope(|s| {
+      let handles: Vec<_> = seed_ids
+        .iter()
+        .map(|&pid| {
+          let claimed = &stat_claimed;
+          s.spawn(move || {
+            let t0 = Instant::now();
+            let Ok(stream) = self.connect_peer(&pid) else {
+              return (pid, 0u64, None, None);
+            };
+            let rtt_us = (t0.elapsed().as_micros() as u64).max(1);
+            if !claimed.swap(true, Ordering::AcqRel) {
+              match self.stat_on_stream(stream, share_name, opts_ref) {
+                Ok(res) => return (pid, rtt_us, Some(res), None),
+                Err(_) => claimed.store(false, Ordering::Release),
+              }
+              return (pid, rtt_us, None, None);
+            }
+            (pid, rtt_us, None, Some(stream))
+          })
+        })
+        .collect();
+      handles
+        .into_iter()
+        .filter_map(|h| h.join().ok())
+        .collect::<Vec<_>>()
+    });
+
+    for (pid, rtt_us, stat_res, stream_opt) in outcomes {
+      if rtt_us > 0 {
+        rtt_map.insert(pid, rtt_us);
+      }
+      if let Some((resp, mf, stream)) = stat_res {
+        reused_conns.lock().insert(pid, stream);
+        origin_pid = pid;
+        stat_ok = Some((resp, mf));
+      } else if let Some(stream) = stream_opt {
+        reused_conns.lock().insert(pid, stream);
+      }
     }
 
-    for (pid, conn_res) in extra_conns {
-      if stat_ok.is_none() {
-        if let Ok((resp, mf, stream)) = self.stat_with_stream(pid, share_name, &opts) {
+    if stat_ok.is_none() {
+      for &pid in seed_ids {
+        let stream_opt = reused_conns.lock().remove(&pid);
+        let res = match stream_opt {
+          Some(s) => self.stat_on_stream(s, share_name, &opts),
+          None => self.stat_with_stream(pid, share_name, &opts),
+        };
+        if let Ok((resp, mf, stream)) = res {
           reused_conns.lock().insert(pid, stream);
           origin_pid = pid;
           stat_ok = Some((resp, mf));
+          break;
         }
-      } else if let Ok(stream) = conn_res {
-        reused_conns.lock().insert(pid, stream);
       }
     }
 
@@ -122,21 +155,62 @@ impl PeerNode {
       }
     }
 
-    for &pid in &seed_ids[1..] {
+    for &pid in seed_ids {
       if pid != self.endpoint_id
         && reused_conns.lock().contains_key(&pid)
         && !candidate_peers.iter().any(|p| p.endpoint_id == pid)
         && let Some(addr) = resolve_iroh_endpoint(&pid)
       {
+        let region = self
+          .get_peer_profile(&pid)
+          .map_or(self.profile.region, |p| p.region);
         candidate_peers.push(SwarmPeer {
           endpoint_id: pid,
-          region: self.profile.region,
+          region,
           weight_rate: resp.eff_rate,
           blk_lo: 0,
           blk_hi: total_blks,
           peer_addrs: encode_socket_addrs(&[addr]),
           profile_card: Vec::new(),
         });
+      }
+    }
+
+    if total_blks > 0 {
+      let unprobed: Vec<PeerId> = candidate_peers
+        .iter()
+        .map(|p| p.endpoint_id)
+        .filter(|id| *id != [0u8; 32] && !rtt_map.contains_key(id))
+        .collect();
+      if !unprobed.is_empty() {
+        let probed = thread::scope(|s| {
+          let handles: Vec<_> = unprobed
+            .iter()
+            .map(|&pid| {
+              s.spawn(move || {
+                let t0 = Instant::now();
+                self
+                  .connect_peer(&pid)
+                  .ok()
+                  .map(|stream| (pid, (t0.elapsed().as_micros() as u64).max(1), stream))
+              })
+            })
+            .collect();
+          handles
+            .into_iter()
+            .filter_map(|h| h.join().ok().flatten())
+            .collect::<Vec<_>>()
+        });
+        for (pid, rtt_us, stream) in probed {
+          rtt_map.insert(pid, rtt_us);
+          reused_conns.lock().insert(pid, stream);
+        }
+      }
+    }
+
+    for sp in &mut candidate_peers {
+      if let Some(&rtt_us) = rtt_map.get(&sp.endpoint_id) {
+        sp.weight_rate = rtt_weighted_rate(sp.weight_rate, rtt_us);
       }
     }
 

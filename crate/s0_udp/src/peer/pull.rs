@@ -28,7 +28,7 @@ use crate::{
 /// 单帧控制面消息最大字节数上限（64 MiB，防止恶意帧长度触发 OOM）
 pub(crate) const MAX_CTRL_FRAME_LEN: usize = 64 * 1024 * 1024;
 /// 动态折半抢占 Work-Stealing 的最小剩余块数阈值（低于该阈值免抢占以消除握手开销）
-const MIN_STEAL_BLOCKS: u32 = 8;
+const MIN_STEAL_BLOCKS: u32 = 64;
 
 #[derive(Clone, Copy)]
 pub(crate) struct RangePullJob<'a> {
