@@ -1,0 +1,33 @@
+about: Nástroje pro synchronizaci souborů peer-to-peer a distribuci s více uzly
+send_about: Odeslat soubor nebo adresář
+recv_about: přijímat soubor nebo adresář
+id_about: Zadejte adresu místního uzlu
+profile_about: Vytvářejte a podepisujte vizitky osobních uzlů
+share_about: Publikování jedné nebo více skupin sdílení souborů
+pull_about: Vytáhněte všechny nebo více vybraných souborů a adresářů ze skupiny sdílení
+push_about: Nahrajte soubory nebo adresáře do skupiny sdílení
+sub_about: Přihlaste se ke sdílení aktualizací skupiny a pomozte s distribucí
+group_about: Připojte se k víceuzlové obousměrné synchronizační skupině
+arg_file_or_dir: Soubor nebo adresář k odeslání
+arg_peer_addr: adresa cílového uzlu
+arg_listen_addr: adresa poslechu
+arg_out_path: Výstupní soubor nebo cesta k adresáři
+arg_rate: Limit rychlosti (bajty/sekunda)
+arg_delete: Odstraňte nadbytečné soubory na straně příjemce
+arg_quiet: tichý režim
+arg_share_name: Sdílejte skupiny a cesty
+arg_local_dir: místní adresář
+arg_dst_dir: cílový adresář
+arg_src_dir: místní zdrojová cesta
+arg_peer_addrs_csv: Seznam adres uzlů (oddělené čárkou)
+arg_origin_addr: Adresa zdrojového uzlu
+arg_subpath: Vícenásobný výběr cest k souboru nebo adresáři (oddělené čárkou)
+arg_auth: Povolit ověřování přístupu
+arg_group_name: Název skupiny a cesta
+arg_config: Klíč a konfigurační adresář
+arg_name: uživatelské jméno
+arg_region: Kód města nebo oblasti
+arg_email: Kontaktní email
+arg_url: Osobní URL
+arg_bio: Personalizovaný podpis (maximálně 256 znaků)
+err_prefix: chyba

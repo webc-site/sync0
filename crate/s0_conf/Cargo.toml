@@ -1,0 +1,17 @@
+[package]
+name = "s0_conf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gxhash = "3.5.0"
+nested-text = { version = "0.1.0", default-features = false }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log_init = "0.1.40"
+tempfile = "3.27.0"

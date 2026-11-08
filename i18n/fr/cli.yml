@@ -1,0 +1,33 @@
+about: Outils de synchronisation de fichiers peer-to-peer et de distribution multi-nœuds
+send_about: Envoyer un fichier ou un répertoire
+recv_about: recevoir un fichier ou un répertoire
+id_about: Afficher l'adresse du nœud local
+profile_about: Générer et signer des cartes de visite de nœud personnel
+share_about: Publier un ou plusieurs groupes de partage de fichiers
+pull_about: Extraire tous ou plusieurs fichiers et répertoires sélectionnés du groupe de partage
+push_about: Télécharger des fichiers ou des répertoires vers un groupe de partage
+sub_about: Abonnez-vous aux mises à jour du groupe de partage et aidez à la distribution
+group_about: Rejoignez un groupe de synchronisation bidirectionnelle multi-nœuds
+arg_file_or_dir: Fichier ou répertoire à envoyer
+arg_peer_addr: adresse du nœud cible
+arg_listen_addr: adresse d'écoute
+arg_out_path: Chemin du fichier de sortie ou du répertoire
+arg_rate: Limite de débit (octets/seconde)
+arg_delete: Supprimer les fichiers redondants du côté récepteur
+arg_quiet: mode silencieux
+arg_share_name: Partager des groupes et des chemins
+arg_local_dir: répertoire local
+arg_dst_dir: répertoire cible
+arg_src_dir: chemin de la source locale
+arg_peer_addrs_csv: Liste des adresses de nœuds (séparées par des virgules)
+arg_origin_addr: Adresse du nœud source
+arg_subpath: Sélection multiple de chemins de fichiers ou de répertoires (séparés par des virgules)
+arg_auth: Activer l'authentification d'accès
+arg_group_name: Nom et chemin du groupe
+arg_config: Répertoire de clés et de configuration
+arg_name: nom d'utilisateur
+arg_region: Indicatif de ville ou de région
+arg_email: E-mail de contact
+arg_url: URL personnelle
+arg_bio: Signature personnalisée (maximum 256 caractères)
+err_prefix: erreur

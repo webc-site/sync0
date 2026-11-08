@@ -1,0 +1,33 @@
+about: 對等檔案同步與多節點分發工具
+send_about: 傳送檔案或目錄
+recv_about: 接收檔案或目錄
+id_about: 輸出本機節點位址
+profile_about: 生成並簽名個人節點名片
+share_about: 發布一個或多個文件分享群組
+pull_about: 從分享群組拉取全部或多選的檔案與目錄
+push_about: 向分享群組上傳檔案或目錄
+sub_about: 訂閱分享組更新並協助分發
+group_about: 加入多節點雙向同步群組
+arg_file_or_dir: 待發送檔案或目錄
+arg_peer_addr: 目標節點位址
+arg_listen_addr: 監聽地址
+arg_out_path: 輸出檔案或目錄路徑
+arg_rate: 速率上限 (位元組/秒)
+arg_delete: 刪除接收端多餘文件
+arg_quiet: 靜默模式
+arg_share_name: 分享群組與路徑
+arg_local_dir: 本地目錄
+arg_dst_dir: 目標目錄
+arg_src_dir: 本地來源路徑
+arg_peer_addrs_csv: 節點位址清單 (逗號分隔)
+arg_origin_addr: 源節點位址
+arg_subpath: 多選檔案或目錄路徑 (逗號分隔)
+arg_auth: 啟用訪問鑑權
+arg_group_name: 群組名稱與路徑
+arg_config: 金鑰與配置目錄
+arg_name: 使用者名稱
+arg_region: 所在城市或地區代碼
+arg_email: 聯絡信箱
+arg_url: 個人網址
+arg_bio: 個性簽名 (上限 256 字元)
+err_prefix: 錯誤

@@ -1,0 +1,33 @@
+about: Công cụ đồng bộ hóa tệp ngang hàng và phân phối nhiều nút
+send_about: Gửi một tập tin hoặc thư mục
+recv_about: nhận tập tin hoặc thư mục
+id_about: Xuất địa chỉ nút cục bộ
+profile_about: Tạo và ký danh thiếp nút cá nhân
+share_about: Xuất bản một hoặc nhiều nhóm chia sẻ tệp
+pull_about: Kéo tất cả hoặc nhiều tệp và thư mục đã chọn từ nhóm chia sẻ
+push_about: Tải tập tin hoặc thư mục lên nhóm chia sẻ
+sub_about: Đăng ký chia sẻ thông tin cập nhật của nhóm và hỗ trợ phân phối
+group_about: Tham gia nhóm đồng bộ hóa hai chiều nhiều nút
+arg_file_or_dir: Tệp hoặc thư mục sẽ được gửi
+arg_peer_addr: địa chỉ nút đích
+arg_listen_addr: địa chỉ nghe
+arg_out_path: Đường dẫn tập tin hoặc thư mục đầu ra
+arg_rate: Giới hạn tốc độ (byte/giây)
+arg_delete: Xóa các tập tin dư thừa ở đầu nhận
+arg_quiet: chế độ im lặng
+arg_share_name: Chia sẻ nhóm và đường dẫn
+arg_local_dir: thư mục cục bộ
+arg_dst_dir: thư mục đích
+arg_src_dir: đường dẫn nguồn cục bộ
+arg_peer_addrs_csv: Danh sách địa chỉ nút (được phân tách bằng dấu phẩy)
+arg_origin_addr: Địa chỉ nút nguồn
+arg_subpath: Nhiều lựa chọn đường dẫn tệp hoặc thư mục (được phân tách bằng dấu phẩy)
+arg_auth: Kích hoạt xác thực truy cập
+arg_group_name: Tên nhóm và đường dẫn
+arg_config: Thư mục khóa và cấu hình
+arg_name: tên người dùng
+arg_region: Mã thành phố hoặc vùng
+arg_email: Email liên hệ
+arg_url: URL cá nhân
+arg_bio: Chữ ký cá nhân (tối đa 256 ký tự)
+err_prefix: sai lầm

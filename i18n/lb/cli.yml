@@ -1,0 +1,33 @@
+about: Peer-to-Peer Dateisynchroniséierung a Multi-Node Verdeelungstools
+send_about: Schéckt eng Datei oder Verzeechnes
+recv_about: kréien Datei oder Verzeechnes
+id_about: Gitt déi lokal Node Adress aus
+profile_about: Generéiere an ënnerschreiwen perséinlech Node Visittekaarten
+share_about: Verëffentlechen een oder méi Dateiedeelegruppen
+pull_about: Pull all oder méi ausgewielte Dateien an Verzeichnisser aus der Deelegrupp
+push_about: Eroplueden Dateien oder Verzeichnisser an eng Deelegrupp
+sub_about: Abonnéiert Iech fir Gruppupdates ze deelen an hëlleft bei der Verdeelung
+group_about: Maacht mat bei enger Multi-Node Zwee-Wee Synchroniséierungsgrupp
+arg_file_or_dir: Datei oder Verzeechnes fir ze schécken
+arg_peer_addr: Zil Node Adress
+arg_listen_addr: lauschteren Adress
+arg_out_path: Ausgabdatei oder Verzeechneswee
+arg_rate: Taux Limit (Bytes / Sekonn)
+arg_delete: Läscht redundante Dateien um Empfangsend
+arg_quiet: stille Modus
+arg_share_name: Deelt Gruppen a Weeër
+arg_local_dir: lokal Verzeechnes
+arg_dst_dir: Zilverzeechnes
+arg_src_dir: lokal Quell Wee
+arg_peer_addrs_csv: Lëscht vun Node Adressen (komma getrennt)
+arg_origin_addr: Quell Node Adress
+arg_subpath: Multiple Auswiel vu Datei- oder Verzeechnesweeër (komma getrennt)
+arg_auth: Aktivéiert Zougang Authentifikatioun
+arg_group_name: Grupp Numm a Wee
+arg_config: Schlëssel a Konfiguratiounsverzeechnes
+arg_name: Benotzernumm
+arg_region: Stad oder Beräich Code
+arg_email: Kontakt E-Mail
+arg_url: Perséinlech URL
+arg_bio: Personaliséiert Ënnerschrëft (maximal 256 Zeechen)
+err_prefix: Feeler

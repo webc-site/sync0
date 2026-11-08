@@ -1,0 +1,33 @@
+about: Peer-to-peer filsynkronisering og multi-node distributionsværktøjer
+send_about: Send en fil eller en mappe
+recv_about: modtage fil eller mappe
+id_about: Udfør den lokale nodeadresse
+profile_about: Generer og underskriv personlige node visitkort
+share_about: Udgiv en eller flere fildelingsgrupper
+pull_about: Træk alle eller flere valgte filer og mapper fra delingsgruppen
+push_about: Upload filer eller mapper til en delingsgruppe
+sub_about: Abonner på deling af gruppeopdateringer og hjælp til distribution
+group_about: Deltag i en multi-node to-vejs synkroniseringsgruppe
+arg_file_or_dir: Fil eller mappe, der skal sendes
+arg_peer_addr: målknudeadresse
+arg_listen_addr: lytteadresse
+arg_out_path: Outputfil eller mappesti
+arg_rate: Hastighedsgrænse (bytes/sekund)
+arg_delete: Slet overflødige filer i den modtagende ende
+arg_quiet: lydløs tilstand
+arg_share_name: Del grupper og stier
+arg_local_dir: lokal mappe
+arg_dst_dir: målmappe
+arg_src_dir: lokal kildesti
+arg_peer_addrs_csv: Liste over nodeadresser (kommasepareret)
+arg_origin_addr: Kildeknudeadresse
+arg_subpath: Flere valg af fil- eller mappestier (kommasepareret)
+arg_auth: Aktiver adgangsgodkendelse
+arg_group_name: Gruppenavn og sti
+arg_config: Nøgle og konfigurationsmappe
+arg_name: brugernavn
+arg_region: By eller områdenummer
+arg_email: Kontakt email
+arg_url: Personlig URL
+arg_bio: Personlig signatur (maks. 256 tegn)
+err_prefix: fejl

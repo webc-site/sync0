@@ -1,0 +1,33 @@
+about: Peer-to-peer filsynkronisering och distributionsverktyg för flera noder
+send_about: Skicka en fil eller katalog
+recv_about: ta emot fil eller katalog
+id_about: Mata ut den lokala nodens adress
+profile_about: Generera och signera personliga nodvisitkort
+share_about: Publicera en eller flera fildelningsgrupper
+pull_about: Dra alla eller flera valda filer och kataloger från delningsgruppen
+push_about: Ladda upp filer eller kataloger till en delningsgrupp
+sub_about: Prenumerera på att dela gruppuppdateringar och hjälpa till med distribution
+group_about: Gå med i en tvåvägssynkroniseringsgrupp med flera noder
+arg_file_or_dir: Fil eller katalog som ska skickas
+arg_peer_addr: målnodsadress
+arg_listen_addr: lyssnande adress
+arg_out_path: Utdatafil eller katalogsökväg
+arg_rate: Hastighetsgräns (byte/sekund)
+arg_delete: Ta bort redundanta filer på den mottagande sidan
+arg_quiet: tyst läge
+arg_share_name: Dela grupper och vägar
+arg_local_dir: lokal katalog
+arg_dst_dir: målkatalog
+arg_src_dir: lokal källsökväg
+arg_peer_addrs_csv: Lista över nodadresser (kommaseparerad)
+arg_origin_addr: Källnodens adress
+arg_subpath: Flera urval av fil- eller katalogsökvägar (kommaseparerade)
+arg_auth: Aktivera åtkomstautentisering
+arg_group_name: Gruppnamn och sökväg
+arg_config: Nyckel och konfigurationskatalog
+arg_name: användarnamn
+arg_region: Stad eller riktnummer
+arg_email: Kontakt e-post
+arg_url: Personlig URL
+arg_bio: Personlig signatur (max 256 tecken)
+err_prefix: misstag

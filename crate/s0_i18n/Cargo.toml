@@ -1,0 +1,11 @@
+[package]
+name = "s0_i18n"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "sync0 多语言国际化支持（基于 ./i18n/*.yml 动态生成并自动匹配系统语言）"
+readme = "../../README.md"
+
+[dependencies]
+sys-locale = "0.3.2"
