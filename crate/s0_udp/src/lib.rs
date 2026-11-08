@@ -1,17 +1,10 @@
 mod ackgen;
 pub mod bench;
-pub mod codec;
-pub mod compio_io;
-pub mod consts;
-pub mod fs;
 pub mod peer;
-pub mod profile;
 mod progress;
 pub mod range;
 mod recv;
-pub mod region;
 mod sender;
-pub mod wire;
 
 use std::{
   io,
@@ -29,6 +22,9 @@ pub use progress::Progress;
 pub use range::{Pacer, RangeSpec, UdpStats, recv_range_udp, send_range_udp};
 pub use recv::{BLOCK, Config, MAX_SLOTS, Outcome, Receiver, RecvStats, SLOTS};
 use s0_cdc::{CdcError, WireError};
+pub use s0_codec as codec;
+pub use s0_fs::{compio_io, fs};
+pub use s0_wire::{consts, profile, region, wire};
 pub use sender::{AckStats, MIN_CAP, Sender, SentInfo};
 use socket2::{Domain, Protocol, Socket, Type};
 use wire::{decode_socket_addrs, encode_punch, encode_punch_padded, encode_socket_addrs};

@@ -1272,6 +1272,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "s0_codec"
+version = "0.1.0"
+dependencies = [
+ "mzstd",
+ "phf",
+ "s0_wire",
+ "thiserror",
+]
+
+[[package]]
 name = "s0_conf"
 version = "0.1.0"
 dependencies = [
@@ -1281,6 +1291,19 @@ dependencies = [
  "log_init",
  "nested-text",
  "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "s0_fs"
+version = "0.1.0"
+dependencies = [
+ "compio",
+ "gxhash",
+ "ignore",
+ "parking_lot",
+ "s0_cdc",
+ "s0_wire",
  "thiserror",
 ]
 
@@ -1325,27 +1348,34 @@ dependencies = [
  "aok",
  "base64",
  "coarsetime",
- "compio",
  "ctor",
- "ed25519-dalek",
  "fastrand",
  "gxhash",
- "ignore",
  "itoa",
  "jiff",
- "log",
  "log_init",
- "mzstd",
  "parking_lot",
- "phf",
  "s0_cc",
  "s0_cdc",
+ "s0_codec",
  "s0_conf",
+ "s0_fs",
+ "s0_wire",
  "socket2",
- "strum",
  "tempfile",
  "thiserror",
  "zmij",
+]
+
+[[package]]
+name = "s0_wire"
+version = "0.1.0"
+dependencies = [
+ "coarsetime",
+ "ed25519-dalek",
+ "s0_cdc",
+ "strum",
+ "thiserror",
 ]
 
 [[package]]
@@ -1560,8 +1590,6 @@ dependencies = [
  "ctor",
  "log_init",
  "rusty_alloc_default",
- "s0_cc",
- "s0_cdc",
  "s0_conf",
  "s0_i18n",
  "s0_udp",

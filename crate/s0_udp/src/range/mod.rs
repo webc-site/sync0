@@ -9,14 +9,13 @@ use std::{
 pub use rx::recv_range_udp;
 pub use tx::send_range_udp;
 
+pub(crate) use crate::consts::TUNNEL_SEG_PAYLOAD;
 use crate::{
   bench::{now_us, wait_until},
-  consts::DEFAULT_SEG_PAYLOAD,
+  consts::{DEFAULT_SEG_PAYLOAD, PKT_ACK, PKT_NACK, PKT_PUNCH},
   is_tunnel_addr, is_tunnel_path,
+  wire::{AckPkt, NackPkt, decode_punch},
 };
-
-/// 隧道/Overlay 网卡（Tailscale / WireGuard / IPv6 最小 MTU 1280）单包有效载荷上限（`1200 + 20 = 1220 <= 1280`，彻底消除 IP 分片丢包，且 `65536 / 1200 = 55 <= 64` 满足 64-bit 分片位图上限）
-pub(crate) const TUNNEL_SEG_PAYLOAD: usize = 1200;
 
 #[inline]
 pub(crate) const fn seg_payload_for_addr(addr: SocketAddr) -> usize {
@@ -33,6 +32,16 @@ pub(crate) fn seg_payload_for_sock(sock: &UdpSocket, peer: SocketAddr) -> usize 
     TUNNEL_SEG_PAYLOAD
   } else {
     DEFAULT_SEG_PAYLOAD
+  }
+}
+
+#[inline]
+pub(super) fn is_valid_ctrl_sid(pkt: &[u8], sid24: u32) -> bool {
+  match pkt.first().copied() {
+    Some(PKT_PUNCH) => decode_punch(pkt) == Ok(sid24),
+    Some(PKT_NACK) => NackPkt::decode(pkt).is_ok_and(|p| p.session_id == sid24),
+    Some(PKT_ACK) => AckPkt::decode(pkt).is_ok_and(|p| p.session_id == sid24),
+    _ => false,
   }
 }
 

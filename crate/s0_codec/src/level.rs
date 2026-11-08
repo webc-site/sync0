@@ -1,4 +1,4 @@
-use crate::consts::ZSTD_DEFAULT_LEVEL;
+use s0_wire::consts::ZSTD_DEFAULT_LEVEL;
 
 /// 候选压缩级别
 pub const LEVELS: [i32; 6] = [-7, -3, 1, 3, 6, 9];

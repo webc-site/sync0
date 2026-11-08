@@ -1,9 +1,9 @@
 use std::str::from_utf8;
 
 use phf::phf_set;
+use s0_wire::consts::MAX_BLOCK;
 
 use super::{Codec, Result, block::SLACK};
-use crate::consts::MAX_BLOCK;
 
 /// 开头试压块数与连续不可压触发跳过阈值
 const PROBE_HEAD: u32 = 2;

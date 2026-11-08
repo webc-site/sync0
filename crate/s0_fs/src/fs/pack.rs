@@ -10,11 +10,8 @@ use std::{
 
 use s0_cdc::FileAt;
 
-use super::FsError;
-use crate::{
-  bench::par_chunk_plan,
-  compio_io::{flush_memory_slices_compio, flush_pack_stream_compio},
-};
+use super::{FsError, par_chunk_plan};
+use crate::compio_io::{flush_memory_slices_compio, flush_pack_stream_compio};
 
 /// 小文件内存聚合池上限（8 MiB）：超过该阈值自动切换为单文件流 `.s0_pack.tmp` 顺序/偏移写入，彻底杜绝内存爆炸
 const MAX_MEM_PACK_BYTES: u64 = 8 << 20;

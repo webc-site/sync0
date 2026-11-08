@@ -1,0 +1,13 @@
+[package]
+name = "s0_wire"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+coarsetime = "0.1.38"
+ed25519-dalek = "3.0.0"
+s0_cdc = { version = "0.1.0", path = "../s0_cdc" }
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.21"

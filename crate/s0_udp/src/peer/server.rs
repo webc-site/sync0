@@ -6,7 +6,7 @@ use std::{
 
 use gxhash::HashMap;
 use parking_lot::RwLock;
-use s0_cdc::{FLAG_DELETE, FLAG_PARTIAL, Manifest};
+use s0_cdc::Manifest;
 
 use super::{
   PeerError, PeerId, ShareConfig, min_nonzero,
@@ -16,7 +16,7 @@ use super::{
 };
 use crate::{
   RangeSpec, bind_udp_for_ip,
-  consts::{HAVE_ALL_ONES, Op, SUB_MAGIC, Status},
+  consts::{FLAG_DELETE, FLAG_PARTIAL, HAVE_ALL_ONES, Op, SUB_MAGIC, Status},
   fs::{BlockSource, FsError, SharedSink, SourceReader, build_manifest_from_paths, is_all_have},
   profile::SignedProfile,
   punch_udp, recv_range_udp,
@@ -76,6 +76,28 @@ pub(crate) struct ServerCtx {
   pub(crate) my_ctrl_addrs: Vec<u8>,
   pub(crate) shares: Arc<RwLock<HashMap<[u8; 16], ShareState>>>,
   pub(crate) known_profiles: Arc<RwLock<HashMap<PeerId, SignedProfile>>>,
+}
+
+impl ServerCtx {
+  fn ok_resp(
+    &self,
+    eff_rate: u64,
+    root_hash: [u8; 16],
+    peer_addrs: Vec<u8>,
+    peers: Vec<SwarmPeer>,
+    manifest: Vec<u8>,
+  ) -> P2pResp {
+    P2pResp {
+      status: Status::Ok,
+      flags: 0,
+      eff_rate,
+      root_hash,
+      peer_addrs,
+      profile_card: self.my_card.clone(),
+      peers,
+      manifest,
+    }
+  }
 }
 
 /// 构建本节点 + 已匹配 `root_hash` 的在线做种节点列表（`Stat` 与 `SubPush` 一处定义复用）
@@ -154,16 +176,13 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         }
       }
       summaries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
-      let resp = P2pResp {
-        status: Status::Ok,
-        flags: 0,
-        eff_rate: 0,
-        root_hash: [0u8; 16],
-        peer_addrs: ctx.my_ctrl_addrs.clone(),
-        profile_card: ctx.my_card.clone(),
-        peers: Vec::new(),
-        manifest: encode_share_summaries(&summaries)?,
-      };
+      let resp = ctx.ok_resp(
+        0,
+        [0u8; 16],
+        ctx.my_ctrl_addrs.clone(),
+        Vec::new(),
+        encode_share_summaries(&summaries)?,
+      );
       write_frame(&mut stream, &resp.encode()?)?;
       continue;
     }
@@ -234,16 +253,13 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           remote_id,
         );
 
-        let resp = P2pResp {
-          status: Status::Ok,
-          flags: 0,
-          eff_rate: access.eff_rate,
+        let resp = ctx.ok_resp(
+          access.eff_rate,
           root_hash,
-          peer_addrs: ctx.my_ctrl_addrs.clone(),
-          profile_card: ctx.my_card.clone(),
+          ctx.my_ctrl_addrs.clone(),
           peers,
-          manifest: mf_bytes,
-        };
+          mf_bytes,
+        );
         write_frame(&mut stream, &resp.encode()?)?;
       }
 
@@ -327,16 +343,13 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         let total = sink.total_blocks();
 
         let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
-        let resp = P2pResp {
-          status: Status::Ok,
-          flags: 0,
-          eff_rate: access.eff_rate,
+        let resp = ctx.ok_resp(
+          access.eff_rate,
           root_hash,
-          peer_addrs: my_udp_addrs,
-          profile_card: ctx.my_card.clone(),
-          peers: Vec::new(),
-          manifest: Vec::new(),
-        };
+          my_udp_addrs,
+          Vec::new(),
+          Vec::new(),
+        );
         let resp_bytes = resp.encode()?;
         let init_have = sink.initial_have_bits();
         if total == 0 || is_all_have(init_have, total) {
@@ -363,16 +376,13 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         if let Some(st) = ctx.shares.write().get_mut(&req.share_id) {
           st.cached_manifest = None;
         }
-        let done = P2pResp {
-          status: Status::Ok,
-          flags: 0,
-          eff_rate: access.eff_rate,
+        let done = ctx.ok_resp(
+          access.eff_rate,
           root_hash,
-          peer_addrs: Vec::new(),
-          profile_card: Vec::new(),
-          peers: Vec::new(),
-          manifest: Vec::new(),
-        };
+          Vec::new(),
+          Vec::new(),
+          Vec::new(),
+        );
         write_frame(&mut stream, &done.encode()?)?;
       }
 
@@ -421,16 +431,13 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
             }
           }
         }
-        let resp = P2pResp {
-          status: Status::Ok,
-          flags: 0,
-          eff_rate: access.eff_rate,
-          root_hash: req.range.map_or([0u8; 16], |(rh, ..)| rh),
-          peer_addrs: ctx.my_ctrl_addrs.clone(),
-          profile_card: ctx.my_card.clone(),
-          peers: swarm_peers,
-          manifest: Vec::new(),
-        };
+        let resp = ctx.ok_resp(
+          access.eff_rate,
+          req.range.map_or([0u8; 16], |(rh, ..)| rh),
+          ctx.my_ctrl_addrs.clone(),
+          swarm_peers,
+          Vec::new(),
+        );
         write_frame(&mut stream, &resp.encode()?)?;
       }
 
@@ -460,16 +467,7 @@ fn serve_pull_udp(
     blk_hi = blk_hi.min(r_hi).min(total);
   }
   let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
-  let resp = P2pResp {
-    status: Status::Ok,
-    flags: 0,
-    eff_rate,
-    root_hash,
-    peer_addrs: my_udp_addrs,
-    profile_card: ctx.my_card.clone(),
-    peers: Vec::new(),
-    manifest: Vec::new(),
-  };
+  let resp = ctx.ok_resp(eff_rate, root_hash, my_udp_addrs, Vec::new(), Vec::new());
   write_frame(stream, &resp.encode()?)?;
   if blk_lo < blk_hi
     && let Ok(peer_udp) = punch_udp(&udp_sock, &req.peer_addrs, 0)

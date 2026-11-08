@@ -121,42 +121,31 @@ pub fn parse_nt_groups(text: &str, base_dir: Option<&Path>) -> Result<Vec<NtGrou
     let mut explicit_users = false;
 
     for (k, v) in gpairs {
+      let s = v.as_str().map(str::trim);
       match k.as_str() {
         "path" | "root" | "dir" => {
-          if let Some(s) = v.as_str() {
-            spec.root = PathBuf::from(s.trim());
+          if let Some(s) = s {
+            spec.root = PathBuf::from(s);
           }
         }
         "auth" => {
-          if let Some(s) = v.as_str() {
-            spec.auth_required = matches!(s.trim(), "true" | "1" | "yes");
+          if let Some(s) = s {
+            spec.auth_required = matches!(s, "true" | "1" | "yes");
           }
         }
-        "perm" | "default_perm" => {
-          if let Some(s) = v.as_str() {
-            spec.default_perm = Some(s.trim().to_owned());
-          }
-        }
+        "perm" | "default_perm" => spec.default_perm = s.map(str::to_owned),
         "rate" | "default_rate" => {
-          if let Some(r) = v.as_str().and_then(parse_rate) {
+          if let Some(r) = s.and_then(parse_rate) {
             spec.default_max_rate = r;
           }
         }
         "write_prefix" | "default_write_prefix" => {
           spec.default_write_prefixes = parse_nt_prefixes(v);
         }
-        "ro_secret" => {
-          if let Some(s) = v.as_str() {
-            spec.ro_secret = Some(s.trim().to_owned());
-          }
-        }
-        "rw_secret" => {
-          if let Some(s) = v.as_str() {
-            spec.rw_secret = Some(s.trim().to_owned());
-          }
-        }
+        "ro_secret" => spec.ro_secret = s.map(str::to_owned),
+        "rw_secret" => spec.rw_secret = s.map(str::to_owned),
         "users_dir" | "user_dir" => {
-          if let Some(dir_str) = v.as_str() {
+          if let Some(dir_str) = s {
             let resolved = resolve_users_dir(dir_str, base_dir);
             for (_, uspec) in load_users_nt_dir(&resolved)? {
               apply_user_spec_to_group(&mut spec, &uspec, name, true);

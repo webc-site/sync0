@@ -5,7 +5,12 @@ mod path;
 mod sink;
 mod source;
 
-use std::{fs::File, io, path::Path, thread};
+use std::{
+  fs::File,
+  io,
+  path::{Path, PathBuf},
+  thread::{self, available_parallelism},
+};
 
 pub use filter::{
   IGNORE_FILE, Ignore, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in,
@@ -13,12 +18,11 @@ pub use filter::{
 pub use path::{MAX_PATH, PathErr, Staging, rel_path, remove, safe_join};
 pub use s0_cdc::is_all_have;
 use s0_cdc::{
-  CdcConfig, CdcError, ChunkSig, Manifest, ManifestEntry, chunk_file, chunk_file_with_buf,
+  CdcConfig, CdcError, ChunkSig, CopySpan, Manifest, ManifestEntry, chunk_file,
+  chunk_file_with_buf, copy_file_span,
 };
 pub use sink::SharedSink;
 pub use source::{BlockSource, SourceReader};
-
-use crate::bench::par_chunk_plan;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FsError {
@@ -34,6 +38,60 @@ pub enum FsError {
   IncompleteCommit(u32, u32),
   #[error("非法相对路径 ({0:?})")]
   BadPath(PathErr),
+}
+
+/// 计算并行分片线程数 `[1, 8]` 与每片长度
+#[inline]
+pub fn par_chunk_plan(len: usize) -> (usize, usize) {
+  let n_threads = available_parallelism()
+    .map_or(4, |n| n.get())
+    .clamp(1, 8)
+    .min(len.div_ceil(8).max(1));
+  (n_threads, len.div_ceil(n_threads))
+}
+
+/// 复用单块堆内存的根目录路径拼接器，消除海量小文件热路径 `Path::join` 重复堆分配
+pub struct RootBuf {
+  buf: PathBuf,
+  base_len: usize,
+}
+
+impl RootBuf {
+  pub fn new(root: &Path) -> Self {
+    let mut buf = PathBuf::with_capacity(root.as_os_str().len() + 64);
+    buf.push(root);
+    buf.push("x");
+    buf.pop();
+    let base_len = buf.as_os_str().len();
+    Self { buf, base_len }
+  }
+
+  pub fn join(&mut self, rel: impl AsRef<Path>) -> &Path {
+    while self.buf.as_os_str().len() > self.base_len {
+      if !self.buf.pop() {
+        break;
+      }
+    }
+    self.buf.push(rel);
+    &self.buf
+  }
+}
+
+/// 批量按偏移区间拷贝本地基准文件块到目标暂存文件
+pub fn copy_file_spans(
+  src: &File,
+  dst: &File,
+  spans: &[CopySpan],
+  buf: &mut Vec<u8>,
+) -> Result<(), CdcError> {
+  if spans.is_empty() {
+    return Ok(());
+  }
+  buf.resize(buf.len().max(64 * 1024), 0);
+  for sp in spans {
+    copy_file_span(src, sp.src_off, dst, sp.dst_off, sp.len, buf)?;
+  }
+  Ok(())
 }
 
 /// 校验相对路径安全性（防止 `..` 路径穿越，复用 `rel_path` 规则）

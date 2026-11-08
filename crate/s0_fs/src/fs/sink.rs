@@ -6,12 +6,10 @@ use std::{
   sync::atomic::{AtomicU64, Ordering},
 };
 
-use s0_cdc::{
-  BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, copy_file_span, hash128, match_basis_file,
-};
+use s0_cdc::{BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, hash128, match_basis_file};
 
 use super::{
-  FsError,
+  FsError, copy_file_spans,
   fd_cache::FdCache,
   pack::{SmallPack, UNPACKED_OFFSET},
   prune_dir, remove, sanitize_rel_path,
@@ -125,20 +123,8 @@ impl SharedSink {
         pack_total += e.size;
       } else if stage_reused > 0 || basis_hit.is_some() {
         let tmp_file = Self::open_rw(&tmp_path, stage_reused == 0, e.size)?;
-        if let Some((basis, plan)) = basis_hit
-          && !plan.copy_spans.is_empty()
-        {
-          io_buf.resize(io_buf.len().max(64 * 1024), 0);
-          for sp in &plan.copy_spans {
-            copy_file_span(
-              &basis,
-              sp.src_off,
-              &tmp_file,
-              sp.dst_off,
-              sp.len,
-              &mut io_buf,
-            )?;
-          }
+        if let Some((basis, plan)) = basis_hit {
+          copy_file_spans(&basis, &tmp_file, &plan.copy_spans, &mut io_buf)?;
         }
         staging_fds.insert(ei as u32, tmp_file);
       } else {
@@ -199,18 +185,22 @@ impl SharedSink {
     }
   }
 
+  #[inline]
   pub fn manifest(&self) -> &Manifest {
     &self.manifest
   }
 
+  #[inline]
   pub fn total_blocks(&self) -> u32 {
     self.block_map.len() as u32
   }
 
+  #[inline]
   pub fn block_loc(&self, block_idx: u32) -> Option<BlockLoc> {
     self.block_map.get(block_idx as usize).copied()
   }
 
+  #[inline]
   pub fn block_size(&self, block_idx: u32) -> u32 {
     self.block_loc(block_idx).map_or(0, |loc| loc.len)
   }
@@ -228,6 +218,7 @@ impl SharedSink {
       .collect()
   }
 
+  #[inline]
   pub fn initial_have_bits(&self) -> &[u8] {
     &self.initial_have_bits
   }
@@ -245,6 +236,7 @@ impl SharedSink {
     out
   }
 
+  #[inline]
   fn word_has_mask(&self, wi: usize, mask: u64) -> bool {
     self
       .have_words
@@ -253,6 +245,7 @@ impl SharedSink {
   }
 
   /// 判断全局块 `block_idx` 是否已校验落盘
+  #[inline]
   pub fn has_block(&self, block_idx: u32) -> bool {
     self.word_has_mask((block_idx >> 6) as usize, 1u64 << (block_idx & 63))
   }
