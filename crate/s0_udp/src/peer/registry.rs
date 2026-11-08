@@ -5,6 +5,7 @@ use std::{
   io::{Read, Seek, SeekFrom, Write},
   net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
   path::PathBuf,
+  slice::from_ref,
   sync::OnceLock,
 };
 
@@ -22,27 +23,60 @@ const REG_FILE_PATH: &str = "/tmp/s0_iroh_reg.bin";
 const REG_ENTRY_LEN: usize = 51;
 const MAX_REG_ENTRIES: usize = 512;
 
-fn global_iroh_routes() -> &'static RwLock<HashMap<PeerId, SocketAddr>> {
-  static ROUTES: OnceLock<RwLock<HashMap<PeerId, SocketAddr>>> = OnceLock::new();
+fn global_iroh_routes() -> &'static RwLock<HashMap<PeerId, Vec<SocketAddr>>> {
+  static ROUTES: OnceLock<RwLock<HashMap<PeerId, Vec<SocketAddr>>>> = OnceLock::new();
   ROUTES.get_or_init(|| RwLock::new(HashMap::default()))
 }
 
-/// 注册 32 字节二进制 `PeerId` 到进程内高速路由表与本机跨进程二进制注册表
+/// 注册 32 字节二进制 `PeerId` 的多个候选端点（支持 IPv6 + IPv4 双栈同时注册）到进程内高速路由表与跨进程注册表
+pub fn register_iroh_endpoints(id: PeerId, addrs: &[SocketAddr]) {
+  if addrs.is_empty() {
+    return;
+  }
+  let mut dedup = Vec::with_capacity(addrs.len());
+  for &a in addrs {
+    if !dedup.contains(&a) {
+      dedup.push(a);
+    }
+  }
+  global_iroh_routes().write().insert(id, dedup.clone());
+  for &a in &dedup {
+    let _ = write_reg_entry(&id, a);
+  }
+}
+
+/// 注册 32 字节二进制 `PeerId` 的单个端点（向后兼容，同地址族覆盖更新、跨 IPv4/IPv6 地址族并存）
 pub fn register_iroh_endpoint(id: PeerId, addr: SocketAddr) {
-  global_iroh_routes().write().insert(id, addr);
+  {
+    let mut guard = global_iroh_routes().write();
+    let list = guard.entry(id).or_default();
+    list.retain(|a| a.is_ipv6() != addr.is_ipv6());
+    if addr.is_ipv6() {
+      list.insert(0, addr);
+    } else {
+      list.push(addr);
+    }
+  }
   let _ = write_reg_entry(&id, addr);
 }
 
-/// 从 32 字节二进制 `PeerId` 解析控制面可达端点
+/// 从 32 字节二进制 `PeerId` 解析全部可达控制面端点列表（IPv6 + IPv4 双栈候选）
+pub fn resolve_iroh_endpoints(id: &PeerId) -> Vec<SocketAddr> {
+  if let Some(list) = global_iroh_routes().read().get(id)
+    && !list.is_empty()
+  {
+    return list.clone();
+  }
+  let entries = read_reg_entries(id);
+  if !entries.is_empty() {
+    global_iroh_routes().write().insert(*id, entries.clone());
+  }
+  entries
+}
+
+/// 从 32 字节二进制 `PeerId` 解析首选控制面可达端点
 pub fn resolve_iroh_endpoint(id: &PeerId) -> Option<SocketAddr> {
-  if let Some(&addr) = global_iroh_routes().read().get(id) {
-    return Some(addr);
-  }
-  if let Some(addr) = read_reg_entry(id) {
-    global_iroh_routes().write().insert(*id, addr);
-    return Some(addr);
-  }
-  None
+  resolve_iroh_endpoints(id).into_iter().next()
 }
 
 /// 获取当前已知或本机活跃的全部 32 字节二进制 `PeerId` 列表（用于免 `--peer` 自动发现组内做种节点）
@@ -59,7 +93,10 @@ pub fn active_iroh_peers() -> Vec<PeerId> {
         {
           let mut id = [0u8; 32];
           id.copy_from_slice(&chunk[..32]);
-          routes.insert(id, addr);
+          let list = routes.entry(id).or_default();
+          if !list.iter().any(|a| a.is_ipv6() == addr.is_ipv6()) {
+            list.push(addr);
+          }
           if !out.contains(&id) {
             out.push(id);
           }
@@ -124,7 +161,7 @@ fn write_reg_entry(id: &PeerId, addr: SocketAddr) -> io::Result<()> {
   let rec = encode_reg_entry(id, addr);
   let mut found = false;
   for chunk in raw.as_chunks_mut::<REG_ENTRY_LEN>().0 {
-    if chunk[..32] == id[..] {
+    if chunk[..32] == id[..] && chunk[32] == rec[32] {
       chunk.copy_from_slice(&rec);
       found = true;
       break;
@@ -143,19 +180,27 @@ fn write_reg_entry(id: &PeerId, addr: SocketAddr) -> io::Result<()> {
   Ok(())
 }
 
-fn read_reg_entry(id: &PeerId) -> Option<SocketAddr> {
-  let mut f = OpenOptions::new().read(true).open(REG_FILE_PATH).ok()?;
+fn read_reg_entries(id: &PeerId) -> Vec<SocketAddr> {
+  let Ok(mut f) = OpenOptions::new().read(true).open(REG_FILE_PATH) else {
+    return Vec::new();
+  };
   let _ = f.try_lock();
   let mut raw = Vec::new();
-  f.read_to_end(&mut raw).ok()?;
+  let _ = f.read_to_end(&mut raw);
   let _ = f.unlock();
+  let mut out = Vec::new();
   for chunk in raw.rchunks_exact(REG_ENTRY_LEN) {
-    if chunk[..32] == id[..] {
-      let arr: &[u8; REG_ENTRY_LEN] = chunk.try_into().ok()?;
-      return decode_reg_addr(arr);
+    if chunk[..32] == id[..]
+      && let Ok(arr) = chunk.try_into()
+      && let Some(addr) = decode_reg_addr(arr)
+      && !out
+        .iter()
+        .any(|a: &SocketAddr| a.is_ipv6() == addr.is_ipv6())
+    {
+      out.push(addr);
     }
   }
-  None
+  out
 }
 
 /// 默认配置目录：`$HOME/.config/sync0`（Windows 回退 `%USERPROFILE%/.config/sync0`）
@@ -221,28 +266,33 @@ pub fn encode_id_b64(bytes: &PeerId) -> String {
   URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// 将 32 字节 `iroh` 公钥与二进制路由端点紧凑编码为单一 `base64url` 地址（零明文 IP 暴露，栈上零堆分配组装）
+/// 将 32 字节 `iroh` 公钥与二进制路由端点紧凑编码为单一 `base64url` 地址
 pub fn encode_iroh_b64(id: &PeerId, addr: SocketAddr) -> String {
-  let mut raw = [0u8; 51];
-  raw[..32].copy_from_slice(id);
-  let len = match addr {
-    SocketAddr::V4(v4) => {
-      raw[32] = 4;
-      raw[33..37].copy_from_slice(&v4.ip().octets());
-      raw[37..39].copy_from_slice(&v4.port().to_le_bytes());
-      39
-    }
-    SocketAddr::V6(v6) => {
-      raw[32] = 6;
-      raw[33..49].copy_from_slice(&v6.ip().octets());
-      raw[49..51].copy_from_slice(&v6.port().to_le_bytes());
-      51
-    }
-  };
-  URL_SAFE_NO_PAD.encode(&raw[..len])
+  encode_iroh_addrs_b64(id, from_ref(&addr))
 }
 
-/// 解码 `base64url` 配置的 `iroh` 地址为 32 字节二进制 `PeerId`
+/// 将 32 字节 `iroh` 公钥与多个双栈候选端点紧凑编码为单一 `base64url` 地址
+pub fn encode_iroh_addrs_b64(id: &PeerId, addrs: &[SocketAddr]) -> String {
+  let mut raw = Vec::with_capacity(32 + addrs.len() * 19);
+  raw.extend_from_slice(id);
+  for &addr in addrs.iter().take(8) {
+    match addr {
+      SocketAddr::V4(v4) => {
+        raw.push(4);
+        raw.extend_from_slice(&v4.ip().octets());
+        raw.extend_from_slice(&v4.port().to_le_bytes());
+      }
+      SocketAddr::V6(v6) => {
+        raw.push(6);
+        raw.extend_from_slice(&v6.ip().octets());
+        raw.extend_from_slice(&v6.port().to_le_bytes());
+      }
+    }
+  }
+  URL_SAFE_NO_PAD.encode(&raw)
+}
+
+/// 解码 `base64url` 配置的 `iroh` 地址为 32 字节二进制 `PeerId`（自动注册内嵌的 IPv4/IPv6 双栈端点）
 pub fn decode_id_b64(s: &str) -> Option<PeerId> {
   let trimmed = s.trim();
   let clean = trimmed
@@ -256,28 +306,33 @@ pub fn decode_id_b64(s: &str) -> Option<PeerId> {
   if raw.len() > 32 {
     let mut id = [0u8; 32];
     id.copy_from_slice(&raw[..32]);
-    let rest = &raw[32..];
-    let addr = match rest.first().copied()? {
-      4 if rest.len() >= 7 => {
-        let ip = Ipv4Addr::new(rest[1], rest[2], rest[3], rest[4]);
-        let port = u16::from_le_bytes([rest[5], rest[6]]);
-        Some(SocketAddr::V4(SocketAddrV4::new(ip, port)))
+    let mut rest = &raw[32..];
+    let mut addrs = Vec::new();
+    while let Some(&tag) = rest.first() {
+      match tag {
+        4 if rest.len() >= 7 => {
+          let ip = Ipv4Addr::new(rest[1], rest[2], rest[3], rest[4]);
+          let port = u16::from_le_bytes([rest[5], rest[6]]);
+          addrs.push(SocketAddr::V4(SocketAddrV4::new(ip, port)));
+          rest = &rest[7..];
+        }
+        6 if rest.len() >= 19 => {
+          let mut oct = [0u8; 16];
+          oct.copy_from_slice(&rest[1..17]);
+          let port = u16::from_le_bytes([rest[17], rest[18]]);
+          addrs.push(SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::from(oct),
+            port,
+            0,
+            0,
+          )));
+          rest = &rest[19..];
+        }
+        _ => break,
       }
-      6 if rest.len() >= 19 => {
-        let mut oct = [0u8; 16];
-        oct.copy_from_slice(&rest[1..17]);
-        let port = u16::from_le_bytes([rest[17], rest[18]]);
-        Some(SocketAddr::V6(SocketAddrV6::new(
-          Ipv6Addr::from(oct),
-          port,
-          0,
-          0,
-        )))
-      }
-      _ => None,
-    };
-    if let Some(a) = addr {
-      register_iroh_endpoint(id, a);
+    }
+    if !addrs.is_empty() {
+      register_iroh_endpoints(id, &addrs);
     }
     return Some(id);
   }

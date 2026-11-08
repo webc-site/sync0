@@ -112,10 +112,17 @@ fn run() -> Result<(), CliError> {
     Some(("pull", sub)) => {
       let (peers, mut uri, dst) = parse_peer_uri_path_args(sub)?;
       uri.extend_paths_csv(sub.get_one::<String>("subpath").unwrap());
-      let opts = TransferOpts::new()
+      let mut opts = TransferOpts::new()
         .with_paths(&uri.paths)
         .with_delete(sub.get_flag("delete"))
         .with_rate(*sub.get_one::<u64>("rate").unwrap());
+      let off_opt = sub.get_one::<u64>("offset").copied();
+      let len_opt = sub.get_one::<u64>("len").copied();
+      if off_opt.is_some() || len_opt.is_some() {
+        let lo = off_opt.unwrap_or(0);
+        let hi = len_opt.map_or(u64::MAX, |n| lo.saturating_add(n));
+        opts = opts.with_byte_range(lo, hi);
+      }
 
       let node = start_node(sub)?;
       let rep = node.swarm_pull(&peers, &uri.group, &dst, opts)?;

@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, net::TcpStream, path::PathBuf, sync::Arc, time::Duration};
+use std::{fs::create_dir_all, net::TcpStream, path::PathBuf, sync::Arc};
 
 use gxhash::HashMap;
 use parking_lot::Mutex;
@@ -6,14 +6,14 @@ use s0_cdc::{FLAG_PARTIAL, Manifest};
 
 use super::{
   PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
-  pull::{RangePullJob, execute_striped_pull, read_frame, write_frame},
-  resolve_iroh_endpoint,
+  pull::{RangePullJob, connect_ctrl_addrs, execute_striped_pull, read_frame, write_frame},
+  resolve_iroh_endpoints,
   server::{ServerCtx, build_swarm_peers},
 };
 use crate::{
   consts::{FLAG_SEED, Op, Status},
   fs::{FsError, SharedSink, build_manifest_from_paths},
-  wire::{P2pReq, P2pResp, SubPush, SwarmPeer, decode_socket_addrs, encode_socket_addrs},
+  wire::{P2pReq, P2pResp, SubPush, SwarmPeer, decode_socket_addrs},
 };
 
 impl PeerNode {
@@ -52,6 +52,7 @@ impl PeerNode {
       profile_card: self.profile_bytes.clone(),
       range: Some((initial.root_hash, 0, initial.total_blocks)),
       token: opts.token,
+      byte_range: None,
     };
     write_frame(&mut stream, &req.encode()?)?;
     let resp_raw = read_frame(&mut stream)?;
@@ -113,6 +114,7 @@ impl PeerNode {
         profile_card: self.profile_bytes.clone(),
         range,
         token: None,
+        byte_range: None,
       };
       if let Ok(mut stream) = self.connect_peer(&peer_id) {
         let _ = write_frame(&mut stream, &req.encode()?);
@@ -192,13 +194,16 @@ impl PeerNode {
         peers: swarm_peers,
         manifest: mf_bytes,
       };
-      let target_addr = resolve_iroh_endpoint(&sub.endpoint_id).unwrap_or(sub.ctrl_addr);
-      if let Ok(mut stream) = TcpStream::connect_timeout(&target_addr, Duration::from_secs(3)) {
-        let _ = stream.set_nodelay(true);
-        if write_frame(&mut stream, &push_ev.encode()?).is_ok() && read_frame(&mut stream).is_ok() {
-          pushed += 1;
-          continue;
-        }
+      let mut target_addrs = resolve_iroh_endpoints(&sub.endpoint_id);
+      if !target_addrs.contains(&sub.ctrl_addr) {
+        target_addrs.push(sub.ctrl_addr);
+      }
+      if let Ok(mut stream) = connect_ctrl_addrs(&target_addrs)
+        && write_frame(&mut stream, &push_ev.encode()?).is_ok()
+        && read_frame(&mut stream).is_ok()
+      {
+        pushed += 1;
+        continue;
       }
       if let Some(st) = self.shares.write().get_mut(&share_id) {
         st.subscribers
@@ -252,6 +257,7 @@ pub(crate) fn handle_incoming_sub_push(
           root_hash: push.root_hash,
           blk_lo: 0,
           blk_hi: total,
+          byte_range: None,
           req_rate: push.eff_rate,
           token: None,
           my_card: &ctx.my_card,
@@ -268,7 +274,7 @@ pub(crate) fn handle_incoming_sub_push(
   commit_res?;
 
   if let Ok(origin_addrs) = decode_socket_addrs(&push.origin_addrs)
-    && let Some(&origin_ctrl) = origin_addrs.first()
+    && !origin_addrs.is_empty()
   {
     let have_req = P2pReq {
       op: Op::Have,
@@ -276,12 +282,13 @@ pub(crate) fn handle_incoming_sub_push(
       share_id: push.share_id,
       req_rate: 0,
       paths: Vec::new(),
-      peer_addrs: encode_socket_addrs(&[ctx.my_ctrl_addr]),
+      peer_addrs: ctx.my_ctrl_addrs.clone(),
       profile_card: ctx.my_card.clone(),
       range: Some((push.root_hash, 0, total)),
       token: None,
+      byte_range: None,
     };
-    if let Ok(mut s) = TcpStream::connect_timeout(&origin_ctrl, Duration::from_secs(2)) {
+    if let Ok(mut s) = connect_ctrl_addrs(&origin_addrs) {
       let _ = write_frame(&mut s, &have_req.encode()?);
       let _ = read_frame(&mut s);
     }

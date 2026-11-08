@@ -1,12 +1,22 @@
-use std::{fs, iter::repeat_n};
+use std::{
+  fs,
+  iter::repeat_n,
+  net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+};
 
 use aok::{OK, Void};
 use s0_conf::GroupUri;
 use s0_udp::{
   consts::Status,
-  peer::{KeyMode, NodeConfig, PeerError, PeerNode, ShareConfig, TransferOpts, decode_id_b64},
+  fs::{SharedSink, SourceReader, build_manifest_from_path},
+  peer::{
+    KeyMode, NodeConfig, PeerError, PeerNode, ShareConfig, TransferOpts, VOD_HEAD_WINDOW_BLOCKS,
+    connect_ctrl_addrs, decode_id_b64, plan_stripes_range, plan_stripes_weighted,
+    register_iroh_endpoints, resolve_iroh_endpoints,
+  },
   profile::ProfileDraft,
   region::Region,
+  wire::SwarmPeer,
 };
 
 #[ctor::ctor(unsafe)]
@@ -39,19 +49,15 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
       .with_url("https://alice.sync0.io"),
     ..Default::default()
   })?;
-
   let node_b = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("bob_shenzhen", Region::Shenzhen),
     ..Default::default()
   })?;
-
   let node_c = PeerNode::start(NodeConfig {
     key_mode: KeyMode::Fixed([0x33; 32]),
     profile: ProfileDraft::new("charlie_tokyo", Region::Tokyo),
     ..Default::default()
   })?;
-
   let node_d = PeerNode::start(NodeConfig {
     key_mode: KeyMode::Fixed([0x44; 32]),
     profile: ProfileDraft::new("dave_root_writer", Region::Singapore),
@@ -221,7 +227,6 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
   fs::write(origin_dir.path().join("extra/note.md"), b"v1-note")?;
 
   let origin = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("origin_beijing", Region::Beijing),
     ..Default::default()
   })?;
@@ -229,12 +234,10 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
   let origin_id = origin.endpoint_id();
 
   let sub_peer1 = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("seed1_shanghai", Region::Shanghai),
     ..Default::default()
   })?;
   let sub_peer2 = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("seed2_shanghai", Region::Shanghai),
     ..Default::default()
   })?;
@@ -265,7 +268,6 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
   assert!(!sub_part_dir.path().join("big.bin").exists());
 
   let downloader = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("dl_shanghai", Region::Shanghai),
     ..Default::default()
   })?;
@@ -280,9 +282,7 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
 
   fs::write(origin_dir.path().join("root_new.txt"), b"root-v2")?;
   fs::write(origin_dir.path().join("sub/part.txt"), b"v2-sub-updated")?;
-  let pushed = origin.publish_updates("repo")?;
-  assert_eq!(pushed, 2);
-
+  assert_eq!(origin.publish_updates("repo")?, 2);
   assert_eq!(
     fs::read(sub_full_dir.path().join("root_new.txt"))?,
     b"root-v2"
@@ -296,28 +296,25 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
     b"v2-sub-updated"
   );
   assert!(!sub_part_dir.path().join("root_new.txt").exists());
-
   OK
 }
 
 #[test]
 fn test_group_mutual_backup_full_and_multi_select() -> Void {
-  let dir1 = tempfile::tempdir()?;
-  let dir2 = tempfile::tempdir()?;
-  let dir3 = tempfile::tempdir()?;
-
+  let (dir1, dir2, dir3) = (
+    tempfile::tempdir()?,
+    tempfile::tempdir()?,
+    tempfile::tempdir()?,
+  );
   let p1 = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("p1", Region::Shenzhen),
     ..Default::default()
   })?;
   let p2 = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("p2", Region::HongKong),
     ..Default::default()
   })?;
   let p3 = PeerNode::start(NodeConfig {
-    key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("p3", Region::Taipei),
     ..Default::default()
   })?;
@@ -360,39 +357,135 @@ fn test_group_mutual_backup_full_and_multi_select() -> Void {
   OK
 }
 
+fn mock_swarm_peer(id: u8, blk_hi: u32) -> SwarmPeer {
+  SwarmPeer {
+    endpoint_id: [id; 32],
+    region: Region::Shanghai,
+    weight_rate: 100_000_000,
+    blk_lo: 0,
+    blk_hi,
+    peer_addrs: Vec::new(),
+    profile_card: Vec::new(),
+  }
+}
+
 #[test]
 fn test_byte_weighted_stripes_for_mixed_file_sizes() -> Void {
-  use s0_udp::{peer::plan_stripes_weighted, wire::SwarmPeer};
-
   // 构造 2 个同地域等权重节点与混合负载：前 8 块为 128KiB 大文件块（共 1MiB），后 256 块为 4KiB 小文件块（共 1MiB）
-  let peers = vec![
-    SwarmPeer {
-      endpoint_id: [1u8; 32],
-      region: Region::Shanghai,
-      weight_rate: 100_000_000,
-      blk_lo: 0,
-      blk_hi: 264,
-      peer_addrs: Vec::new(),
-      profile_card: Vec::new(),
-    },
-    SwarmPeer {
-      endpoint_id: [2u8; 32],
-      region: Region::Shanghai,
-      weight_rate: 100_000_000,
-      blk_lo: 0,
-      blk_hi: 264,
-      peer_addrs: Vec::new(),
-      profile_card: Vec::new(),
-    },
-  ];
+  let peers = vec![mock_swarm_peer(1, 264), mock_swarm_peer(2, 264)];
   let mut weights = Vec::with_capacity(264);
   weights.extend(repeat_n(131_072u64, 8));
   weights.extend(repeat_n(4_096u64, 256));
 
   let stripes = plan_stripes_weighted(Region::Shanghai, &peers, &weights);
-  assert_eq!(stripes.len(), 2);
-  // 第 0 个节点分得 [0, 8)（8 个 128KiB 大块 = 1MiB），第 1 个节点分得 [8, 264)（256 个 4KiB 小块 = 1MiB）
-  assert_eq!(stripes[0], (0, 0, 8));
-  assert_eq!(stripes[1], (1, 8, 264));
+  assert_eq!(stripes, vec![(0, 0, 8), (1, 8, 264)]);
+  OK
+}
+
+#[test]
+fn test_vod_byte_range_crash_resume_and_dualstack_happy_eyeballs() -> Void {
+  let (src_dir, vod_dir, resume_dir, v6_dst_dir) = (
+    tempfile::tempdir()?,
+    tempfile::tempdir()?,
+    tempfile::tempdir()?,
+    tempfile::tempdir()?,
+  );
+
+  let mut video_data = vec![0u8; 800_000];
+  let mut rng = 0x9E37_79B9_7F4A_7C15u64;
+  for b in &mut video_data {
+    rng ^= rng << 13;
+    rng ^= rng >> 7;
+    rng ^= rng << 17;
+    *b = rng as u8;
+  }
+  fs::write(src_dir.path().join("movie.mp4"), &video_data)?;
+
+  // 1. 验证 VoD Head-First Priority 条带规划：首窗口 16 块优先分配给第 0 号最低 RTT 节点
+  let dummy_peers = vec![mock_swarm_peer(1, 60), mock_swarm_peer(2, 60)];
+  let vod_stripes = plan_stripes_range(
+    Region::Shanghai,
+    &dummy_peers,
+    &vec![32_768u64; 60],
+    10,
+    50,
+    true,
+  );
+  assert_eq!(vod_stripes[0], (0, 10, 10 + VOD_HEAD_WINDOW_BLOCKS));
+  assert_eq!(vod_stripes[1], (1, 10 + VOD_HEAD_WINDOW_BLOCKS, 50));
+
+  // 2. 启动 IPv6 ([::1]) 双栈源节点，验证双栈路由注册、Happy Eyeballs 竞速连接与 FLAG_BYTE_RANGE 点播偏移拉取
+  let seed_v6 = PeerNode::start(NodeConfig {
+    bind_addr: Some(SocketAddr::from((Ipv6Addr::LOCALHOST, 0))),
+    profile: ProfileDraft::new("seed_dualstack", Region::Shanghai),
+    ..Default::default()
+  })?;
+  seed_v6.add_share(ShareConfig::public_ro("vod", src_dir.path(), 0));
+  let seed_id = seed_v6.endpoint_id();
+
+  // 注册一个不可达 IPv6 端口 + 真实双栈端点，验证 Happy Eyeballs 竞速回退
+  let mut race_addrs = vec![SocketAddr::from((Ipv6Addr::LOCALHOST, 9))];
+  race_addrs.extend_from_slice(seed_v6.ctrl_addrs());
+  register_iroh_endpoints(seed_id, &race_addrs);
+  assert!(resolve_iroh_endpoints(&seed_id).len() >= 2);
+  assert!(
+    connect_ctrl_addrs(&resolve_iroh_endpoints(&seed_id))?
+      .peer_addr()
+      .is_ok()
+  );
+  register_iroh_endpoints(seed_id, seed_v6.ctrl_addrs());
+
+  let client = PeerNode::start(NodeConfig {
+    bind_addr: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))),
+    profile: ProfileDraft::new("vod_client", Region::Shanghai),
+    ..Default::default()
+  })?;
+
+  let (byte_lo, byte_hi) = (220_000u64, 480_000u64);
+  let rep_vod = client.pull(
+    seed_id,
+    "vod",
+    vod_dir.path(),
+    TransferOpts::new().with_byte_range(byte_lo, byte_hi),
+  )?;
+  assert!(rep_vod.blocks_transferred > 0 && rep_vod.blocks_transferred < rep_vod.total_blocks);
+
+  let mf = build_manifest_from_path(src_dir.path(), "", false)?;
+  let vod_sink = SharedSink::prepare(vod_dir.path(), mf.clone())?;
+  let mut vod_slice = vec![0u8; (byte_hi - byte_lo) as usize];
+  assert_eq!(
+    vod_sink.read_at_offset(0, byte_lo, &mut vod_slice)?,
+    vod_slice.len()
+  );
+  assert_eq!(
+    &vod_slice[..],
+    &video_data[byte_lo as usize..byte_hi as usize]
+  );
+
+  // 3. 验证 .s0_stage.<filename> 崩溃中断后的零状态文件断点续传（仅传输剩余未完成块）
+  let (total_blks, half_blks) = (mf.total_blocks(), mf.total_blocks() / 2);
+  {
+    let reader = SourceReader::open(src_dir.path(), mf.clone())?;
+    let crashed_sink = SharedSink::prepare(resume_dir.path(), mf)?;
+    let mut blk_buf = Vec::new();
+    for b in 0..half_blks {
+      reader.read_block(b, &mut blk_buf)?;
+      assert!(crashed_sink.write_verified_block(b, &blk_buf)?);
+    }
+  }
+  assert!(resume_dir.path().join(".s0_stage.movie.mp4").exists());
+  let rep_resume = client.pull(seed_id, "vod", resume_dir.path(), TransferOpts::new())?;
+  assert_eq!(rep_resume.blocks_transferred, total_blks - half_blks);
+  assert_eq!(fs::read(resume_dir.path().join("movie.mp4"))?, video_data);
+
+  // 4. 验证纯 IPv6 节点到节点的全量高速拉取
+  let client_v6 = PeerNode::start(NodeConfig {
+    bind_addr: Some(SocketAddr::from((Ipv6Addr::LOCALHOST, 0))),
+    profile: ProfileDraft::new("client_v6", Region::Shanghai),
+    ..Default::default()
+  })?;
+  let rep_v6 = client_v6.pull(seed_id, "vod", v6_dst_dir.path(), TransferOpts::new())?;
+  assert_eq!(rep_v6.blocks_transferred, total_blks);
+  assert_eq!(fs::read(v6_dst_dir.path().join("movie.mp4"))?, video_data);
   OK
 }

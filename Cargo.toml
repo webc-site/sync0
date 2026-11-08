@@ -26,9 +26,6 @@ opt-level = 3
 [profile.release.package.s0_udp]
 opt-level = 3
 
-[profile.release.package.blake3]
-opt-level = 3
-
 [profile.release.package.gxhash]
 opt-level = 3
 

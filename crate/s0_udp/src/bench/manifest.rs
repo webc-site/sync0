@@ -129,7 +129,7 @@ pub(super) fn entries_from_changes(
   Ok((entries, arena, total))
 }
 
-/// 多线程并行扫描 + 小文件无锁预分配内存池：按已排序路径分片并行执行 `open + pread + FastCDC/BLAKE3`
+/// 多线程并行扫描 + 小文件无锁预分配内存池：按已排序路径分片并行执行 `open + pread + FastCDC/gxhash128`
 fn entries_from_changes_par(
   root: &Path,
   scanned: Vec<ScannedFile>,

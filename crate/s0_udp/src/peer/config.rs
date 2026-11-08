@@ -6,7 +6,7 @@ use std::{
 
 use gxhash::HashMap;
 use s0_cdc::{Manifest, hash128, matches_any_selected};
-use s0_conf::{normalize_prefixes, parse_nt_groups};
+use s0_conf::{extend_clean_paths_csv, normalize_prefixes, parse_nt_groups};
 
 use super::{KeyMode, PeerError, PeerId, decode_id_b64};
 use crate::{
@@ -350,4 +350,87 @@ impl NodeConfig {
   pub fn sign_profile(&self, sk: &SecretKey) -> Result<SignedProfile, PeerError> {
     Ok(self.profile.clone().sign(sk)?)
   }
+}
+
+/// 同步/拉取/推送请求参数 (`TransferOpts`)
+#[derive(Debug, Default, Clone)]
+pub struct TransferOpts<'a> {
+  pub subpath: &'a str,
+  pub paths: Vec<String>,
+  pub delete_extraneous: bool,
+  pub req_rate: u64,
+  pub token: Option<[u8; 16]>,
+  pub byte_range: Option<(u64, u64)>,
+}
+
+impl<'a> TransferOpts<'a> {
+  pub const fn new() -> Self {
+    Self {
+      subpath: "",
+      paths: Vec::new(),
+      delete_extraneous: false,
+      req_rate: 0,
+      token: None,
+      byte_range: None,
+    }
+  }
+
+  pub fn with_subpath(mut self, subpath: &'a str) -> Self {
+    self.subpath = subpath;
+    extend_clean_paths_csv(&mut self.paths, subpath);
+    self
+  }
+
+  /// 多选任意多个文件或子目录（空列表表示同步整个分享组全部内容）
+  pub fn with_paths<I, S>(mut self, paths: I) -> Self
+  where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+  {
+    for p in paths {
+      extend_clean_paths_csv(&mut self.paths, p.as_ref());
+    }
+    self
+  }
+
+  pub const fn with_delete(mut self, delete_extraneous: bool) -> Self {
+    self.delete_extraneous = delete_extraneous;
+    self
+  }
+
+  pub const fn with_rate(mut self, req_rate: u64) -> Self {
+    self.req_rate = req_rate;
+    self
+  }
+
+  pub const fn with_token(mut self, token: Option<[u8; 16]>) -> Self {
+    self.token = token;
+    self
+  }
+
+  /// 指定点播/随机读取字节半开区间 `[byte_lo, byte_hi)`（`byte_hi == u64::MAX` 表示 `byte_lo..EOF`）
+  pub const fn with_byte_range(mut self, byte_lo: u64, byte_hi: u64) -> Self {
+    self.byte_range = Some((byte_lo, byte_hi));
+    self
+  }
+
+  /// 导出归一化后的多选路径列表（空 `Vec` 代表整个分享组根目录）
+  pub fn resolved_paths(&self) -> Vec<String> {
+    if !self.paths.is_empty() {
+      return self.paths.clone();
+    }
+    let mut out = Vec::new();
+    extend_clean_paths_csv(&mut out, self.subpath);
+    out
+  }
+}
+
+/// 同步/拉取结果统计
+#[derive(Debug, Default, Clone)]
+pub struct SyncReport {
+  pub root_hash: [u8; 16],
+  pub total_blocks: u32,
+  pub blocks_transferred: u32,
+  pub bytes_transferred: u64,
+  pub peers_used: usize,
 }

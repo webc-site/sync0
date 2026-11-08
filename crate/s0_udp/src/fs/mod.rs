@@ -28,7 +28,7 @@ pub enum FsError {
   Cdc(#[from] CdcError),
   #[error("目录遍历/忽略规则错误: {0}")]
   Ignore(#[from] ignore::Error),
-  #[error("块 {0} BLAKE3 摘要校验不匹配或长度非法")]
+  #[error("块 {0} gxhash128 摘要校验不匹配或长度非法")]
   BlockCorrupted(u32),
   #[error("尚有未完成落盘的块 ({0}/{1})，拒绝原子提交")]
   IncompleteCommit(u32, u32),

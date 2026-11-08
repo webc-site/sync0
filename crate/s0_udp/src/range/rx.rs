@@ -39,7 +39,7 @@ fn update_locked_peer(locked: &mut Option<SocketAddr>, from: SocketAddr) {
   *locked = Some(from);
 }
 
-/// 原生 UDP 区间接收引擎（支持 SuperBlock 跨小文件批量解包 + 逐文件 BLAKE3-128 摘要防投毒校验 + $O(1)$ 内存缓冲池）
+/// 原生 UDP 区间接收引擎（支持 SuperBlock 跨小文件批量解包 + 逐文件 `gxhash128` 摘要防投毒校验 + $O(1)$ 内存缓冲池）
 pub fn recv_range_udp(
   sock: &UdpSocket,
   peer_addrs: &[SocketAddr],
@@ -373,7 +373,7 @@ fn recycle_buf(pool: &mut Vec<Vec<u8>>, mut b: Vec<u8>) {
   }
 }
 
-/// 解压并逐块校验 BLAKE3-128 摘要（支持单块与 SuperBlock 跨小文件批量解包，任意子块篡改立即返回 `BlockCorrupted`）
+/// 解压并逐块校验 `gxhash128` 摘要（支持单块与 SuperBlock 跨小文件批量解包，任意子块篡改立即返回 `BlockCorrupted`）
 fn unpack_and_verify(
   sink: &SharedSink,
   codec: &mut Codec,

@@ -131,6 +131,14 @@ impl<'a> From<&'a Arc<SharedSink>> for BlockSource<'a> {
 
 impl BlockSource<'_> {
   #[inline]
+  pub fn manifest(&self) -> &Manifest {
+    match self {
+      Self::Committed(r) => r.manifest(),
+      Self::InProgress(s) => s.manifest(),
+    }
+  }
+
+  #[inline]
   pub fn total_blocks(&self) -> u32 {
     match self {
       Self::Committed(r) => r.total_blocks(),

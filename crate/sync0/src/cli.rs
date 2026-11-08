@@ -105,6 +105,18 @@ pub(crate) fn build_cli(cmd: Command, i18n: &'static I18n) -> Command {
             .help(i18n.arg_rate)
             .value_parser(parse_rate_str)
             .default_value("0"),
+        )
+        .arg(
+          Arg::new("offset")
+            .long("offset")
+            .value_name("bytes")
+            .value_parser(value_parser!(u64)),
+        )
+        .arg(
+          Arg::new("len")
+            .long("len")
+            .value_name("bytes")
+            .value_parser(value_parser!(u64)),
         ),
       i18n,
     ))

@@ -1,7 +1,7 @@
 use std::{
   io,
   iter::once,
-  net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+  net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream},
   sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -13,12 +13,13 @@ use std::{
 use gxhash::HashMap;
 use parking_lot::RwLock;
 use s0_cdc::{Manifest, WireError};
-use s0_conf::{ConfError, extend_clean_paths_csv};
+use s0_conf::ConfError;
 
 use super::{
-  KeyMode, NodeConfig, PeerId, ShareConfig, derive_share_id, encode_id_b64, encode_iroh_b64,
-  pull::{connect_ctrl_tcp, read_frame, write_frame},
-  register_iroh_endpoint, resolve_iroh_endpoint,
+  KeyMode, NodeConfig, PeerId, ShareConfig, TransferOpts, derive_share_id, encode_id_b64,
+  encode_iroh_addrs_b64,
+  pull::{connect_ctrl_addrs, read_frame, write_frame},
+  register_iroh_endpoints, resolve_iroh_endpoints,
   server::{ServerCtx, ShareState, SwarmSeedRecord, handle_conn},
 };
 use crate::{
@@ -56,87 +57,13 @@ pub enum PeerError {
   Conf(#[from] ConfError),
 }
 
-/// 同步/拉取/推送请求参数 (`TransferOpts`)
-#[derive(Debug, Default, Clone)]
-pub struct TransferOpts<'a> {
-  pub subpath: &'a str,
-  pub paths: Vec<String>,
-  pub delete_extraneous: bool,
-  pub req_rate: u64,
-  pub token: Option<[u8; 16]>,
-}
-
-impl<'a> TransferOpts<'a> {
-  pub const fn new() -> Self {
-    Self {
-      subpath: "",
-      paths: Vec::new(),
-      delete_extraneous: false,
-      req_rate: 0,
-      token: None,
-    }
-  }
-
-  pub fn with_subpath(mut self, subpath: &'a str) -> Self {
-    self.subpath = subpath;
-    extend_clean_paths_csv(&mut self.paths, subpath);
-    self
-  }
-
-  /// 多选任意多个文件或子目录（空列表表示同步整个分享组全部内容）
-  pub fn with_paths<I, S>(mut self, paths: I) -> Self
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-  {
-    for p in paths {
-      extend_clean_paths_csv(&mut self.paths, p.as_ref());
-    }
-    self
-  }
-
-  pub const fn with_delete(mut self, delete_extraneous: bool) -> Self {
-    self.delete_extraneous = delete_extraneous;
-    self
-  }
-
-  pub const fn with_rate(mut self, req_rate: u64) -> Self {
-    self.req_rate = req_rate;
-    self
-  }
-
-  pub const fn with_token(mut self, token: Option<[u8; 16]>) -> Self {
-    self.token = token;
-    self
-  }
-
-  /// 导出归一化后的多选路径列表（空 `Vec` 代表整个分享组根目录）
-  pub fn resolved_paths(&self) -> Vec<String> {
-    if !self.paths.is_empty() {
-      return self.paths.clone();
-    }
-    let mut out = Vec::new();
-    extend_clean_paths_csv(&mut out, self.subpath);
-    out
-  }
-}
-
-/// 同步/拉取结果统计
-#[derive(Debug, Default, Clone)]
-pub struct SyncReport {
-  pub root_hash: [u8; 16],
-  pub total_blocks: u32,
-  pub blocks_transferred: u32,
-  pub bytes_transferred: u64,
-  pub peers_used: usize,
-}
-
 /// 全对称 P2P 节点引擎 (`PeerNode`)
 pub struct PeerNode {
   pub(crate) endpoint_id: PeerId,
   pub(crate) profile: SignedProfile,
   pub(crate) profile_bytes: Vec<u8>,
   pub(crate) ctrl_addr: SocketAddr,
+  pub(crate) ctrl_addrs: Vec<SocketAddr>,
   pub(crate) shares: Arc<RwLock<HashMap<[u8; 16], ShareState>>>,
   pub(crate) known_profiles: Arc<RwLock<HashMap<PeerId, SignedProfile>>>,
   stop: Arc<AtomicBool>,
@@ -144,7 +71,7 @@ pub struct PeerNode {
 }
 
 impl PeerNode {
-  /// 启动对等节点守护引擎
+  /// 启动对等节点守护引擎（支持 IPv4 + IPv6 双栈控制面监听与自动注册）
   pub fn start(cfg: NodeConfig) -> Result<Arc<Self>, PeerError> {
     let secret_key = cfg.key_mode.resolve_secret_key()?;
     let endpoint_id = *secret_key.public().as_bytes();
@@ -158,7 +85,24 @@ impl PeerNode {
     let ctrl_addr = listener.local_addr()?;
     listener.set_nonblocking(true)?;
 
-    register_iroh_endpoint(endpoint_id, ctrl_addr);
+    let mut listeners = vec![listener];
+    let mut ctrl_addrs = vec![ctrl_addr];
+    if cfg.bind_addr.is_none() || (bind_target.ip().is_loopback() && bind_target.port() == 0) {
+      let alt_target = if ctrl_addr.is_ipv6() {
+        SocketAddr::from((Ipv4Addr::LOCALHOST, 0))
+      } else {
+        SocketAddr::from((Ipv6Addr::LOCALHOST, 0))
+      };
+      if let Ok(alt_l) = TcpListener::bind(alt_target)
+        && let Ok(alt_a) = alt_l.local_addr()
+        && alt_l.set_nonblocking(true).is_ok()
+      {
+        ctrl_addrs.push(alt_a);
+        listeners.push(alt_l);
+      }
+    }
+
+    register_iroh_endpoints(endpoint_id, &ctrl_addrs);
 
     let shares = Arc::new(RwLock::new(HashMap::default()));
     let mut kp = HashMap::default();
@@ -170,7 +114,7 @@ impl PeerNode {
       my_id: endpoint_id,
       my_region: profile.region,
       my_card: profile_bytes.clone(),
-      my_ctrl_addr: ctrl_addr,
+      my_ctrl_addrs: encode_socket_addrs(&ctrl_addrs),
       shares: Arc::clone(&shares),
       known_profiles: Arc::clone(&known_profiles),
     };
@@ -178,21 +122,26 @@ impl PeerNode {
 
     let accept_thread = thread::spawn(move || {
       while !stop_bg.load(Ordering::Acquire) {
-        match listener.accept() {
-          Ok((stream, _peer)) => {
-            let _ = stream.set_nonblocking(false);
-            let _ = stream.set_nodelay(true);
-            let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
-            let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
-            let ctx = srv_ctx.clone();
-            thread::spawn(move || {
-              let _ = handle_conn(stream, &ctx);
-            });
+        let mut accepted = false;
+        for l in &listeners {
+          match l.accept() {
+            Ok((stream, _peer)) => {
+              accepted = true;
+              let _ = stream.set_nonblocking(false);
+              let _ = stream.set_nodelay(true);
+              let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+              let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+              let ctx = srv_ctx.clone();
+              thread::spawn(move || {
+                let _ = handle_conn(stream, &ctx);
+              });
+            }
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+            Err(_) => return,
           }
-          Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-            thread::sleep(Duration::from_millis(5));
-          }
-          Err(_) => break,
+        }
+        if !accepted {
+          thread::sleep(Duration::from_millis(5));
         }
       }
     });
@@ -202,6 +151,7 @@ impl PeerNode {
       profile,
       profile_bytes,
       ctrl_addr,
+      ctrl_addrs,
       shares,
       known_profiles,
       stop,
@@ -223,16 +173,28 @@ impl PeerNode {
     self.endpoint_id
   }
 
+  /// 本节点主控制面监听地址
+  #[inline]
+  pub fn ctrl_addr(&self) -> SocketAddr {
+    self.ctrl_addr
+  }
+
+  /// 本节点全部双栈控制面监听地址列表
+  #[inline]
+  pub fn ctrl_addrs(&self) -> &[SocketAddr] {
+    &self.ctrl_addrs
+  }
+
   /// 本节点 43 字符 `base64url` `iroh` 身份地址
   #[inline]
   pub fn iroh_id_b64(&self) -> String {
     encode_id_b64(&self.endpoint_id)
   }
 
-  /// 本节点带紧凑二进制路由后缀的 `base64url` `iroh` 地址
+  /// 本节点带紧凑二进制双栈路由后缀的 `base64url` `iroh` 地址
   #[inline]
   pub fn iroh_addr_b64(&self) -> String {
-    encode_iroh_b64(&self.endpoint_id, self.ctrl_addr)
+    encode_iroh_addrs_b64(&self.endpoint_id, &self.ctrl_addrs)
   }
 
   /// 本节点自签名名片
@@ -244,7 +206,7 @@ impl PeerNode {
   /// 本节点控制面地址字节编码
   #[inline]
   pub fn ctrl_addrs_encoded(&self) -> Vec<u8> {
-    encode_socket_addrs(&[self.ctrl_addr])
+    encode_socket_addrs(&self.ctrl_addrs)
   }
 
   /// 查询已验证的远端对等节点自签名名片
@@ -298,8 +260,11 @@ impl PeerNode {
   }
 
   pub(crate) fn connect_peer(&self, peer_id: &PeerId) -> Result<TcpStream, PeerError> {
-    let addr = resolve_iroh_endpoint(peer_id).ok_or(PeerError::NoHealthyPeer)?;
-    connect_ctrl_tcp(&addr)
+    let addrs = resolve_iroh_endpoints(peer_id);
+    if addrs.is_empty() {
+      return Err(PeerError::NoHealthyPeer);
+    }
+    connect_ctrl_addrs(&addrs)
   }
 
   /// 查询远端对等节点托管的全部文件分享组与当前访问权限 (`Op::ListShares = 7`)
@@ -318,6 +283,7 @@ impl PeerNode {
       profile_card: self.profile_bytes.clone(),
       range: None,
       token,
+      byte_range: None,
     };
     let mut stream = self.connect_peer(&peer_id)?;
     write_frame(&mut stream, &req.encode()?)?;
@@ -368,6 +334,7 @@ impl PeerNode {
       profile_card: self.profile_bytes.clone(),
       range: None,
       token: opts.token,
+      byte_range: opts.byte_range,
     };
     write_frame(&mut stream, &req.encode()?)?;
     let resp_raw = read_frame(&mut stream)?;
@@ -410,9 +377,9 @@ impl PeerNode {
       {
         if register_ctrl
           && let Ok(addrs) = decode_socket_addrs(addrs_raw)
-          && let Some(&first) = addrs.first()
+          && !addrs.is_empty()
         {
-          register_iroh_endpoint(card.pubkey, first);
+          register_iroh_endpoints(card.pubkey, &addrs);
         }
         guard.insert(card.pubkey, card);
       }
@@ -442,7 +409,7 @@ impl PeerNode {
       let Some(&ctrl_addr) = addrs.first() else {
         continue;
       };
-      register_iroh_endpoint(p.endpoint_id, ctrl_addr);
+      register_iroh_endpoints(p.endpoint_id, &addrs);
       st.upsert_seed(SwarmSeedRecord {
         endpoint_id: p.endpoint_id,
         region: p.region,

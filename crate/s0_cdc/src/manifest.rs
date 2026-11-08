@@ -9,13 +9,10 @@ pub const FLAG_DELETE: u8 = 1 << 0;
 /// 请求/推送标志位：增量路径子集更新
 pub const FLAG_PARTIAL: u8 = 1 << 1;
 
-/// 计算数据切片的 128-bit BLAKE3 摘要（利用 `blake3` SIMD 加速）
+/// 计算数据切片的 128-bit `gxhash128` 硬件 AES/SIMD 加速内容摘要
 #[inline]
 pub fn hash128(data: &[u8]) -> [u8; 16] {
-  let full = blake3::hash(data);
-  let mut out = [0u8; 16];
-  out.copy_from_slice(&full.as_bytes()[..16]);
-  out
+  gxhash::gxhash128(data, 0).to_le_bytes()
 }
 
 /// 单块内容寻址签名
@@ -26,7 +23,7 @@ pub struct ChunkSig {
   pub hash: [u8; 16],
 }
 
-/// 对内存切片执行 FastCDC 分块并计算每块 128-bit BLAKE3 摘要
+/// 对内存切片执行 FastCDC 分块并计算每块 128-bit `gxhash128` 摘要
 pub fn chunk_slice(data: &[u8], cfg: CdcConfig) -> Vec<ChunkSig> {
   if data.is_empty() {
     return Vec::new();
@@ -76,6 +73,51 @@ impl Manifest {
   /// 全局总块数
   pub fn total_blocks(&self) -> u32 {
     self.entries.iter().map(|e| e.chunks.len() as u32).sum()
+  }
+
+  /// 将相对于所选文件（或清单逻辑字节流）的字节区间 `[byte_lo, byte_hi)` 在 $O(\log N)$ 时间内映射为全局块号半开区间 `[blk_lo, blk_hi)`
+  pub fn locate_byte_range(&self, byte_lo: u64, byte_hi: u64) -> (u32, u32) {
+    if byte_lo >= byte_hi || self.entries.is_empty() {
+      return (0, 0);
+    }
+    if self.entries.len() == 1 {
+      let e = &self.entries[0];
+      if e.deleted || e.chunks.is_empty() || byte_lo >= e.size {
+        return (0, 0);
+      }
+      return chunk_range_in_slice(&e.chunks, byte_lo, byte_hi);
+    }
+    let mut logical_base = 0u64;
+    let mut blk_base = 0u32;
+    let mut found_lo = u32::MAX;
+    let mut found_hi = 0u32;
+    for e in &self.entries {
+      if e.deleted || e.size == 0 || e.chunks.is_empty() {
+        continue;
+      }
+      let entry_hi = logical_base.saturating_add(e.size);
+      if entry_hi > byte_lo && logical_base < byte_hi {
+        let (c_lo, c_hi) = chunk_range_in_slice(
+          &e.chunks,
+          byte_lo.saturating_sub(logical_base),
+          byte_hi.saturating_sub(logical_base),
+        );
+        if c_lo < c_hi {
+          found_lo = found_lo.min(blk_base + c_lo);
+          found_hi = found_hi.max(blk_base + c_hi);
+        }
+      }
+      logical_base = entry_hi;
+      blk_base += e.chunks.len() as u32;
+      if logical_base >= byte_hi {
+        break;
+      }
+    }
+    if found_lo < found_hi {
+      (found_lo, found_hi)
+    } else {
+      (0, 0)
+    }
   }
 
   /// 构建全局块号 `0..total_blocks` 到文件偏移的 $O(1)$ 索引表
@@ -242,11 +284,18 @@ impl Manifest {
     })
   }
 
-  /// 计算当前清单的 128-bit BLAKE3 快照根摘要 `root_hash`
+  /// 计算当前清单的 128-bit `gxhash128` 快照根摘要 `root_hash`
   pub fn root_hash(&self) -> Result<[u8; 16], CdcError> {
     let raw = self.encode()?;
     Ok(hash128(&raw))
   }
+}
+
+#[inline]
+fn chunk_range_in_slice(chunks: &[ChunkSig], rel_lo: u64, rel_hi: u64) -> (u32, u32) {
+  let lo = chunks.partition_point(|c| c.offset.saturating_add(u64::from(c.len)) <= rel_lo) as u32;
+  let hi = chunks.partition_point(|c| c.offset < rel_hi) as u32;
+  if lo < hi { (lo, hi) } else { (0, 0) }
 }
 
 /// 位图置位辅助函数（`usize` 索引）

@@ -4,6 +4,7 @@ use std::{
   sync::{
     Arc,
     atomic::{AtomicU32, Ordering},
+    mpsc::{self, RecvTimeoutError},
   },
   thread,
   time::Duration,
@@ -14,12 +15,12 @@ use parking_lot::Mutex;
 use s0_cdc::for_each_missing_span;
 
 use super::{
-  PeerError, PeerId, plan_stripes_weighted, rank_swarm_peers, register_iroh_endpoint,
-  resolve_iroh_endpoint,
+  PeerError, PeerId, plan_stripes_range, rank_swarm_peers, register_iroh_endpoints,
+  resolve_iroh_endpoints,
 };
 use crate::{
   RangeSpec, UdpError, bind_udp_for_ip,
-  consts::{FLAG_RANGE, HAVE_ALL_ONES, Op, Status},
+  consts::{FLAG_BYTE_RANGE, FLAG_RANGE, HAVE_ALL_ONES, Op, Status, V6_PREFER_MARGIN_US},
   fs::SharedSink,
   punch_udp, recv_range_udp,
   region::Region,
@@ -40,6 +41,7 @@ pub(crate) struct RangePullJob<'a> {
   pub(crate) root_hash: [u8; 16],
   pub(crate) blk_lo: u32,
   pub(crate) blk_hi: u32,
+  pub(crate) byte_range: Option<(u64, u64)>,
   pub(crate) req_rate: u64,
   pub(crate) token: Option<[u8; 16]>,
   pub(crate) my_card: &'a [u8],
@@ -58,58 +60,144 @@ pub(crate) const fn derive_push_session_id(root_hash: &[u8; 16]) -> u32 {
   u32::from_le_bytes([root_hash[0], root_hash[1], root_hash[2], 0])
 }
 
-pub(crate) fn resolve_swarm_peer_addr(peer: &SwarmPeer) -> Result<SocketAddr, PeerError> {
-  if let Some(addr) = resolve_iroh_endpoint(&peer.endpoint_id) {
-    return Ok(addr);
-  }
-  let addrs = decode_socket_addrs(&peer.peer_addrs)?;
-  if let Some(&first) = addrs.first() {
-    if peer.endpoint_id != [0u8; 32] {
-      register_iroh_endpoint(peer.endpoint_id, first);
+pub(crate) fn resolve_swarm_peer_addrs(peer: &SwarmPeer) -> Result<Vec<SocketAddr>, PeerError> {
+  let mut out = resolve_iroh_endpoints(&peer.endpoint_id);
+  if let Ok(decoded) = decode_socket_addrs(&peer.peer_addrs)
+    && !decoded.is_empty()
+  {
+    for a in decoded {
+      if !out.contains(&a) {
+        out.push(a);
+      }
     }
-    return Ok(first);
+    if peer.endpoint_id != [0u8; 32] {
+      register_iroh_endpoints(peer.endpoint_id, &out);
+    }
   }
-  Err(PeerError::NoHealthyPeer)
+  if out.is_empty() {
+    return Err(PeerError::NoHealthyPeer);
+  }
+  Ok(out)
 }
 
-pub(crate) fn connect_ctrl_tcp(addr: &SocketAddr) -> Result<TcpStream, PeerError> {
+#[inline]
+pub(crate) fn connect_once(addr: &SocketAddr) -> io::Result<TcpStream> {
   let step = if addr.ip().is_loopback() {
-    Duration::from_millis(500)
+    Duration::from_millis(350)
   } else {
-    Duration::from_millis(850)
+    Duration::from_millis(600)
   };
+  let s = TcpStream::connect_timeout(addr, step)?;
+  let _ = s.set_nodelay(true);
+  let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
+  let _ = s.set_write_timeout(Some(Duration::from_secs(10)));
+  Ok(s)
+}
+
+pub(crate) fn probe_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerError> {
+  if addrs.len() == 1 {
+    return connect_once(&addrs[0]).map_err(PeerError::Io);
+  }
+  connect_ctrl_addrs(addrs)
+}
+
+pub fn connect_ctrl_tcp(addr: &SocketAddr) -> Result<TcpStream, PeerError> {
   let mut last_err = None;
   for _ in 0..3 {
-    match TcpStream::connect_timeout(addr, step) {
-      Ok(s) => {
-        let _ = s.set_nodelay(true);
-        let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
-        let _ = s.set_write_timeout(Some(Duration::from_secs(10)));
-        return Ok(s);
-      }
+    match connect_once(addr) {
+      Ok(s) => return Ok(s),
       Err(e) => last_err = Some(e),
     }
   }
   Err(PeerError::Io(last_err.unwrap()))
 }
 
+/// RFC 8305 Happy Eyeballs 双栈竞速连接：
+/// 当候选列表同时包含 IPv6 与 IPv4 地址时，优先发起 IPv6 连接，并在 `5ms` (`V6_PREFER_MARGIN_US`) 后并发发起 IPv4 连接，先完成握手者立即胜出
+pub fn connect_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerError> {
+  if addrs.is_empty() {
+    return Err(PeerError::NoHealthyPeer);
+  }
+  if addrs.len() == 1 {
+    return connect_ctrl_tcp(&addrs[0]);
+  }
+  let v6_opt = addrs.iter().copied().find(SocketAddr::is_ipv6);
+  let v4_opt = addrs.iter().copied().find(SocketAddr::is_ipv4);
+  if let (Some(v6), Some(v4)) = (v6_opt, v4_opt) {
+    let (tx, rx) = mpsc::channel();
+    let tx6 = tx.clone();
+    thread::spawn(move || {
+      let _ = tx6.send(connect_once(&v6));
+    });
+    let mut pending = 1usize;
+    let mut last_err = None;
+    match rx.recv_timeout(Duration::from_micros(V6_PREFER_MARGIN_US)) {
+      Ok(Ok(s)) => return Ok(s),
+      Ok(Err(e)) => {
+        pending = 0;
+        last_err = Some(e);
+      }
+      Err(RecvTimeoutError::Timeout) => {}
+      Err(RecvTimeoutError::Disconnected) => pending = 0,
+    }
+    thread::spawn(move || {
+      let _ = tx.send(connect_once(&v4));
+    });
+    pending += 1;
+    while pending > 0 {
+      match rx.recv_timeout(Duration::from_millis(900)) {
+        Ok(Ok(s)) => return Ok(s),
+        Ok(Err(e)) => {
+          pending -= 1;
+          last_err = Some(e);
+        }
+        Err(_) => break,
+      }
+    }
+    for addr in addrs.iter().filter(|&&a| a != v6 && a != v4) {
+      if let Ok(s) = connect_once(addr) {
+        return Ok(s);
+      }
+    }
+    if let Some(e) = last_err {
+      return Err(PeerError::Io(e));
+    }
+    return Err(PeerError::NoHealthyPeer);
+  }
+
+  let mut last_err = None;
+  for addr in addrs {
+    match connect_ctrl_tcp(addr) {
+      Ok(s) => return Ok(s),
+      Err(e) => last_err = Some(e),
+    }
+  }
+  Err(last_err.unwrap_or(PeerError::NoHealthyPeer))
+}
+
 pub(crate) fn pull_range_from_swarm_peer(
   job: RangePullJob<'_>,
   reused_stream: Option<TcpStream>,
 ) -> Result<(u32, u64, TcpStream), PeerError> {
-  let ctrl_addr = resolve_swarm_peer_addr(job.peer)?;
   let mut stream = match reused_stream {
     Some(s) => s,
-    None => connect_ctrl_tcp(&ctrl_addr)?,
+    None => {
+      let addrs = resolve_swarm_peer_addrs(job.peer)?;
+      connect_ctrl_addrs(&addrs)?
+    }
   };
 
   let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
   let cli_port = udp_sock.local_addr()?.port();
   let sid = derive_session_id(&job.root_hash, job.blk_lo ^ (u32::from(cli_port) << 8));
+  let mut flags = FLAG_RANGE;
+  if job.byte_range.is_some() {
+    flags |= FLAG_BYTE_RANGE;
+  }
 
   let req = P2pReq {
     op: Op::Pull,
-    flags: FLAG_RANGE,
+    flags,
     share_id: job.share_id,
     req_rate: job.req_rate,
     paths: job.paths.to_vec(),
@@ -117,6 +205,7 @@ pub(crate) fn pull_range_from_swarm_peer(
     profile_card: job.my_card.to_vec(),
     range: Some((job.root_hash, job.blk_lo, job.blk_hi)),
     token: job.token,
+    byte_range: job.byte_range,
   };
 
   let req_bytes = req.encode()?;
@@ -145,10 +234,7 @@ pub(crate) fn pull_range_from_swarm_peer(
   Ok((st.blocks_transferred, st.bytes_transferred, stream))
 }
 
-/// 跨节点并发条带化拉取与动态折半抢占 Work-Stealing：
-/// - 复用已建立 TCP 控制流，消除二次握手；
-/// - 移除多节点单条带硬编码速率上限，充分发挥多路径并发聚合带宽；
-/// - 快节点完成自身条带后，立即检查慢节点尚未完成的条带尾部并执行动态折半抢占（Work-Stealing），消除木桶效应长尾延迟。
+/// 跨节点并发条带化拉取、点播首屏优先调度与动态折半抢占 Work-Stealing
 pub(crate) fn execute_striped_pull(
   local_region: Region,
   candidate_peers: Vec<SwarmPeer>,
@@ -156,7 +242,9 @@ pub(crate) fn execute_striped_pull(
   reused_conns: &Mutex<HashMap<PeerId, TcpStream>>,
 ) -> Result<(u32, u64, usize), PeerError> {
   let total_blocks = base_job.sink.total_blocks();
-  if total_blocks == 0 || base_job.sink.is_range_complete(0, total_blocks) {
+  let req_hi = base_job.blk_hi.min(total_blocks);
+  let req_lo = base_job.blk_lo.min(req_hi);
+  if req_lo >= req_hi || base_job.sink.is_range_complete(req_lo, req_hi) {
     return Ok((0, 0, 0));
   }
 
@@ -166,8 +254,22 @@ pub(crate) fn execute_striped_pull(
   }
 
   let block_weights = base_job.sink.block_weights();
-  let stripes = plan_stripes_weighted(local_region, &ranked, &block_weights);
-  let peers_used = stripes.len();
+  let vod_head_first = base_job.byte_range.is_some() || req_lo > 0;
+  let stripes = plan_stripes_range(
+    local_region,
+    &ranked,
+    &block_weights,
+    req_lo,
+    req_hi,
+    vod_head_first,
+  );
+  let mut unique_peers = Vec::with_capacity(stripes.len());
+  for &(p_idx, ..) in &stripes {
+    if !unique_peers.contains(&p_idx) {
+      unique_peers.push(p_idx);
+    }
+  }
+  let peers_used = unique_peers.len();
   let per_stripe_rate = base_job.req_rate;
   let stripe_bounds: Arc<Vec<(AtomicU32, AtomicU32)>> = Arc::new(
     stripes
@@ -201,9 +303,8 @@ pub(crate) fn execute_striped_pull(
             conn,
           )?;
 
-          // 动态折半抢占 Work-Stealing：快节点完成后主动接管慢节点尚未完成的条带后半区间
           let mut stream_opt = Some(stream);
-          while !base_job.sink.is_range_complete(0, total_blocks) {
+          while !base_job.sink.is_range_complete(req_lo, req_hi) {
             let Some((steal_lo, steal_hi)) = try_steal_tail(base_job.sink, &bounds, peer) else {
               break;
             };
@@ -253,18 +354,18 @@ pub(crate) fn execute_striped_pull(
     return Err(PeerError::SnapshotConflict);
   }
 
-  if !base_job.sink.is_range_complete(0, total_blocks) {
+  if !base_job.sink.is_range_complete(req_lo, req_hi) {
     for (p_idx, peer) in ranked.iter().enumerate() {
       if poisoned_indices.contains(&p_idx) {
         continue;
       }
-      if base_job.sink.is_range_complete(0, total_blocks) {
+      if base_job.sink.is_range_complete(req_lo, req_hi) {
         break;
       }
       let have = base_job.sink.snapshot_have_bits();
-      let mut min_lo = total_blocks;
-      let mut max_hi = 0u32;
-      for_each_missing_span(&have, 0, total_blocks, |lo, hi| {
+      let mut min_lo = req_hi;
+      let mut max_hi = req_lo;
+      for_each_missing_span(&have, req_lo, req_hi, |lo, hi| {
         if lo < min_lo {
           min_lo = lo;
         }
@@ -297,11 +398,11 @@ pub(crate) fn execute_striped_pull(
     }
   }
 
-  if !base_job.sink.is_range_complete(0, total_blocks) {
+  if !base_job.sink.is_range_complete(req_lo, req_hi) {
     if !poisoned_indices.is_empty() {
-      return Err(PeerError::Udp(UdpError::PoisonedPeer(0)));
+      return Err(PeerError::Udp(UdpError::PoisonedPeer(req_lo)));
     }
-    return Err(PeerError::Udp(UdpError::Timeout(0, total_blocks)));
+    return Err(PeerError::Udp(UdpError::Timeout(req_lo, req_hi)));
   }
 
   Ok((blocks_transferred, bytes_transferred, peers_used))

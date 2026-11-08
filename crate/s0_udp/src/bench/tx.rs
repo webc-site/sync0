@@ -426,7 +426,7 @@ fn send_inner_sock(
     {
       if !tx.got_ack {
         tx.backoff = (tx.backoff + 1).min(4);
-        if tx.pkt_size > TUNNEL_PKT {
+        if tx.backoff >= 2 && tx.pkt_size > TUNNEL_PKT {
           tx.downgrade_mtu();
           next_blk = tx.done_lo;
         }

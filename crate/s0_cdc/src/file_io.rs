@@ -2,7 +2,7 @@ use std::{fs::File, io};
 
 use crate::{CdcConfig, CdcError, ChunkSig, find_boundary, hash128};
 
-/// 128 位 BLAKE3 内容指纹（16 字节，100 GB 数据下碰撞率 < 10^-24）
+/// 128 位 `gxhash128` 内容指纹（16 字节，100 GB 数据下碰撞率 < 10^-24）
 pub type Hash128 = [u8; 16];
 
 /// 流式文件读取缓冲大小（1 MiB = 16 × 默认最大块，减少大文件 `pread` 系统调用与滑窗 `memmove` 频次）
@@ -61,13 +61,13 @@ impl FileAt for File {
   }
 }
 
-/// 跨平台流式对文件执行 FastCDC 分块与 BLAKE3 签名（基于 `FileAt`，固定缓冲零拷贝滑窗）
+/// 跨平台流式对文件执行 FastCDC 分块与 `gxhash128` 签名（基于 `FileAt`，固定缓冲零拷贝滑窗）
 pub fn chunk_file(file: &File, size: u64, cfg: CdcConfig) -> Result<Vec<ChunkSig>, CdcError> {
   let mut buf = Vec::new();
   chunk_file_with_buf(file, size, cfg, &mut buf)
 }
 
-/// 复用调用方提供的读取缓冲 `buf` 对文件执行 FastCDC 分块与 BLAKE3 签名（适合海量文件批处理）
+/// 复用调用方提供的读取缓冲 `buf` 对文件执行 FastCDC 分块与 `gxhash128` 签名（适合海量文件批处理）
 pub fn chunk_file_with_buf(
   file: &File,
   size: u64,

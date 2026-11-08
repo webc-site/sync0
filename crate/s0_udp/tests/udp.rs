@@ -8,12 +8,13 @@ use std::{
 
 use aok::{OK, Void};
 use s0_udp::{
-  RangeSpec,
+  BLOCK, Config, Outcome, RangeSpec, Receiver, UdpError,
   bench::handle_probe_observed,
   bind_udp_ephemeral,
-  consts::PKT_PUNCH,
+  consts::{DATA_HDR_LEN, DEFAULT_PKT, PKT_PUNCH, TUNNEL_PKT},
   fs::{SharedSink, SourceReader, build_manifest_from_path},
   probe_external_udp_addr, punch_udp, recv_range_udp, send_range_udp,
+  wire::{DataHeader, StreamDataHeader, decode_punch, encode_punch_padded},
 };
 
 #[ctor::ctor(unsafe)]
@@ -205,8 +206,6 @@ fn test_anti_amplification_and_nat_real_port_measurement() -> Void {
 
 #[test]
 fn test_anti_poisoning_and_in_progress_seeding() -> Void {
-  use s0_udp::{UdpError, consts::DATA_HDR_LEN, wire::DataHeader};
-
   let src_dir = tempfile::tempdir()?;
   let leecher_dir = tempfile::tempdir()?;
   let peer3_dir = tempfile::tempdir()?;
@@ -222,7 +221,7 @@ fn test_anti_poisoning_and_in_progress_seeding() -> Void {
   assert!(total >= 4);
   let half = total / 2;
 
-  // 1. 恶意节点投毒测试：连续发送 3 个伪造/篡改载荷的分块，接收端通过 BLAKE3-128 摘要校验拦截（零落盘污染）并驱逐该恶意节点 (`UdpError::PoisonedPeer`)
+  // 1. 恶意节点投毒测试：连续发送 3 个伪造/篡改载荷的分块，接收端通过 gxhash128 摘要校验拦截（零落盘污染）并驱逐该恶意节点 (`UdpError::PoisonedPeer`)
   let sink_poison = SharedSink::prepare(leecher_dir.path(), mf.clone())?;
   let (mal_sock, mal_addrs) = bind_udp_ephemeral()?;
   let (rx_sock, rx_addrs) = bind_udp_ephemeral()?;
@@ -401,12 +400,6 @@ fn test_small_file_superblock_and_pack_stream() -> Void {
 
 #[test]
 fn test_dplpmtud_adaptive_receiver_and_padded_punch() -> Void {
-  use s0_udp::{
-    BLOCK, Config, Outcome, Receiver,
-    consts::{DEFAULT_PKT, TUNNEL_PKT},
-    wire::{StreamDataHeader, decode_punch, encode_punch_padded},
-  };
-
   // 1. 1400B DPLPMTUD 填充探测打洞包编解码验证
   let padded = encode_punch_padded(0x00AB_CDEF);
   assert_eq!(padded.len(), DEFAULT_PKT);

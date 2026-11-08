@@ -16,10 +16,10 @@ use s0_cdc::{FLAG_DELETE, FLAG_PARTIAL};
 use super::{
   PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
   pull::{
-    RangePullJob, connect_ctrl_tcp, derive_push_session_id, execute_striped_pull,
-    is_have_all_ones_frame, read_frame, write_frame, write_two_frames,
+    RangePullJob, derive_push_session_id, execute_striped_pull, is_have_all_ones_frame,
+    probe_ctrl_addrs, read_frame, write_frame, write_two_frames,
   },
-  register_iroh_endpoint, resolve_iroh_endpoint,
+  register_iroh_endpoints, resolve_iroh_endpoints,
   server::ShareState,
 };
 use crate::{
@@ -41,7 +41,7 @@ fn rtt_weighted_rate(base_rate: u64, rtt_us: u64) -> u64 {
 }
 
 impl PeerNode {
-  /// 从指定 `PeerId` 或其返回的 P2P Swarm 节点群拉取全部或多选的文件/目录 (`Op::Pull = 1`)
+  /// 从指定 `PeerId` 或其返回的 P2P Swarm 节点群拉取全部、多选或指定字节区间 `[byte_lo, byte_hi)` (`Op::Pull = 1`)
   pub fn pull(
     &self,
     peer_id: PeerId,
@@ -53,8 +53,7 @@ impl PeerNode {
   }
 
   /// 多源并发拉取 (`swarm_pull`)：
-  /// 通过二进制 `PeerId` 连接种子节点并自动通过 PEX 发现组内所有做种节点，按地域亲和度与实测 RTT 反比带宽权重条带化并发拉取 `[blk_lo, blk_hi)`，
-  /// 下载过程中实时在后台汇报已校验连续块进展（Leecher Seeding 边下边传）。
+  /// 支持全量/多选同步、崩溃 `.s0_stage` 断点续传以及 `with_byte_range` 点播首屏优先拉取
   pub fn swarm_pull(
     &self,
     seed_ids: &[PeerId],
@@ -143,9 +142,9 @@ impl PeerNode {
     for sp in resp.peers {
       if sp.endpoint_id != [0u8; 32]
         && let Ok(addrs) = decode_socket_addrs(&sp.peer_addrs)
-        && let Some(&first) = addrs.first()
+        && !addrs.is_empty()
       {
-        register_iroh_endpoint(sp.endpoint_id, first);
+        register_iroh_endpoints(sp.endpoint_id, &addrs);
       }
       if sp.endpoint_id != self.endpoint_id
         && !candidate_peers
@@ -160,20 +159,22 @@ impl PeerNode {
       if pid != self.endpoint_id
         && reused_conns.lock().contains_key(&pid)
         && !candidate_peers.iter().any(|p| p.endpoint_id == pid)
-        && let Some(addr) = resolve_iroh_endpoint(&pid)
       {
-        let region = self
-          .get_peer_profile(&pid)
-          .map_or(self.profile.region, |p| p.region);
-        candidate_peers.push(SwarmPeer {
-          endpoint_id: pid,
-          region,
-          weight_rate: resp.eff_rate,
-          blk_lo: 0,
-          blk_hi: total_blks,
-          peer_addrs: encode_socket_addrs(&[addr]),
-          profile_card: Vec::new(),
-        });
+        let addrs = resolve_iroh_endpoints(&pid);
+        if !addrs.is_empty() {
+          let region = self
+            .get_peer_profile(&pid)
+            .map_or(self.profile.region, |p| p.region);
+          candidate_peers.push(SwarmPeer {
+            endpoint_id: pid,
+            region,
+            weight_rate: resp.eff_rate,
+            blk_lo: 0,
+            blk_hi: total_blks,
+            peer_addrs: encode_socket_addrs(&addrs),
+            profile_card: Vec::new(),
+          });
+        }
       }
     }
 
@@ -189,12 +190,12 @@ impl PeerNode {
             .iter()
             .map(|&pid| {
               s.spawn(move || {
-                let addr = resolve_iroh_endpoint(&pid)?;
+                let addrs = resolve_iroh_endpoints(&pid);
+                if addrs.is_empty() {
+                  return None;
+                }
                 let t0 = Instant::now();
-                let stream = TcpStream::connect_timeout(&addr, Duration::from_millis(600)).ok()?;
-                let _ = stream.set_nodelay(true);
-                let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
-                let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+                let stream = probe_ctrl_addrs(&addrs).ok()?;
                 Some((pid, (t0.elapsed().as_micros() as u64).max(1), stream))
               })
             })
@@ -223,14 +224,24 @@ impl PeerNode {
       }
     }
 
-    if opts.delete_extraneous && sel_paths.is_empty() {
+    if opts.delete_extraneous && sel_paths.is_empty() && opts.byte_range.is_none() {
       mf.delete_extraneous = true;
     }
 
     let sink = Arc::new(SharedSink::prepare(local_dst, mf)?);
     let total_blocks = sink.total_blocks();
-    if total_blocks == 0 || sink.is_range_complete(0, total_blocks) {
-      sink.commit()?;
+    let (req_lo, req_hi) = if let Some((b_lo, b_hi)) = opts.byte_range {
+      sink.manifest().locate_byte_range(b_lo, b_hi)
+    } else {
+      (0, total_blocks)
+    };
+
+    if total_blocks == 0 || req_lo >= req_hi || sink.is_range_complete(req_lo, req_hi) {
+      if opts.byte_range.is_some() {
+        sink.commit_range(req_lo, req_hi)?;
+      } else {
+        sink.commit()?;
+      }
       return Ok(SyncReport {
         root_hash,
         total_blocks,
@@ -257,7 +268,7 @@ impl PeerNode {
     };
 
     let leech_done = Arc::new(AtomicBool::new(false));
-    if was_registered && sel_paths.is_empty() && total_blocks >= 8 {
+    if was_registered && sel_paths.is_empty() && opts.byte_range.is_none() && total_blocks >= 8 {
       let leech_flag = Arc::clone(&leech_done);
       let sink_watch = Arc::clone(&sink);
       let my_ctrl_addrs = self.ctrl_addrs_encoded();
@@ -279,10 +290,9 @@ impl PeerNode {
           }
           if cur_hi >= reported_hi + 8 || (cur_hi == total_blocks && cur_hi > reported_hi) {
             reported_hi = cur_hi;
-            if conn_opt.is_none()
-              && let Some(addr) = resolve_iroh_endpoint(&origin_pid)
-            {
-              conn_opt = connect_ctrl_tcp(&addr).ok();
+            if conn_opt.is_none() {
+              let addrs = resolve_iroh_endpoints(&origin_pid);
+              conn_opt = probe_ctrl_addrs(&addrs).ok();
             }
             if let Some(s) = conn_opt.as_mut() {
               let have_req = P2pReq {
@@ -295,6 +305,7 @@ impl PeerNode {
                 profile_card: my_card.clone(),
                 range: Some((root_hash, 0, cur_hi)),
                 token: tok,
+                byte_range: None,
               };
               let ok = have_req
                 .encode()
@@ -320,8 +331,9 @@ impl PeerNode {
         share_id,
         paths: &sel_paths,
         root_hash,
-        blk_lo: 0,
-        blk_hi: total_blocks,
+        blk_lo: req_lo,
+        blk_hi: req_hi,
+        byte_range: opts.byte_range,
         req_rate: opts.req_rate,
         token: opts.token,
         my_card: &self.profile_bytes,
@@ -333,7 +345,11 @@ impl PeerNode {
     leech_done.store(true, Ordering::Release);
 
     let commit_res = if pull_res.is_ok() {
-      sink.commit().map_err(PeerError::Fs)
+      if opts.byte_range.is_some() || req_lo > 0 || req_hi < total_blocks {
+        sink.commit_range(req_lo, req_hi).map_err(PeerError::Fs)
+      } else {
+        sink.commit().map_err(PeerError::Fs)
+      }
     } else {
       Ok(())
     };
@@ -397,6 +413,7 @@ impl PeerNode {
       profile_card: self.profile_bytes.clone(),
       range: Some((root_hash, 0, total_blocks)),
       token: opts.token,
+      byte_range: None,
     };
 
     let req_bytes = req.encode()?;

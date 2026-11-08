@@ -36,6 +36,9 @@ pub const FLAG_SEED: u8 = 1 << 3;
 /// 请求标志位：携带读写能力令牌或请求读写权限
 pub const FLAG_RW: u8 = 1 << 4;
 
+/// 请求标志位：指定点播/随机读取字节区间 `[byte_lo, byte_hi)`（`byte_hi == u64::MAX` 表示 `byte_lo..EOF`）
+pub const FLAG_BYTE_RANGE: u8 = 1 << 5;
+
 /// 缺失块位图全 1 标记（表示接收方已拥有全部块，0 字节位图负载）
 pub const HAVE_ALL_ONES: u32 = 0xFFFF_FFFF;
 
