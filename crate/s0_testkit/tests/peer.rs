@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, iter::repeat_n};
 
 use aok::{OK, Void};
 use s0_conf::GroupUri;
@@ -357,5 +357,42 @@ fn test_group_mutual_backup_full_and_multi_select() -> Void {
     b"tx-commit-2-from-p3"
   );
 
+  OK
+}
+
+#[test]
+fn test_byte_weighted_stripes_for_mixed_file_sizes() -> Void {
+  use s0_udp::{peer::plan_stripes_weighted, wire::SwarmPeer};
+
+  // 构造 2 个同地域等权重节点与混合负载：前 8 块为 128KiB 大文件块（共 1MiB），后 256 块为 4KiB 小文件块（共 1MiB）
+  let peers = vec![
+    SwarmPeer {
+      endpoint_id: [1u8; 32],
+      region: Region::Shanghai,
+      weight_rate: 100_000_000,
+      blk_lo: 0,
+      blk_hi: 264,
+      peer_addrs: Vec::new(),
+      profile_card: Vec::new(),
+    },
+    SwarmPeer {
+      endpoint_id: [2u8; 32],
+      region: Region::Shanghai,
+      weight_rate: 100_000_000,
+      blk_lo: 0,
+      blk_hi: 264,
+      peer_addrs: Vec::new(),
+      profile_card: Vec::new(),
+    },
+  ];
+  let mut weights = Vec::with_capacity(264);
+  weights.extend(repeat_n(131_072u64, 8));
+  weights.extend(repeat_n(4_096u64, 256));
+
+  let stripes = plan_stripes_weighted(Region::Shanghai, &peers, &weights);
+  assert_eq!(stripes.len(), 2);
+  // 第 0 个节点分得 [0, 8)（8 个 128KiB 大块 = 1MiB），第 1 个节点分得 [8, 264)（256 个 4KiB 小块 = 1MiB）
+  assert_eq!(stripes[0], (0, 0, 8));
+  assert_eq!(stripes[1], (1, 8, 264));
   OK
 }

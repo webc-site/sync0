@@ -11,7 +11,7 @@ use s0_cc::Cc;
 use s0_cdc::{CdcConfig, chunk_file};
 
 use super::{
-  BLK, DGRAM, FIN_MAGIC, PKT, Role, RootBuf, WINDOW_BLOCKS,
+  BLK, DGRAM, FIN_MAGIC, PKT, Role, RootBuf, TUNNEL_PKT, WINDOW_BLOCKS,
   manifest::{
     Entry, ManifestMode, encode_manifest, entries_from_changes, entries_from_scanned, scan_dir,
     send_manifest,
@@ -24,6 +24,7 @@ use super::{
 };
 use crate::{
   BIND_V4, BIND_V6, Progress, Sender, UdpError, bind_std_udp, codec::skip_name, fs::ScannedFile,
+  is_tunnel_path,
 };
 
 /// 尾部探测：单次补发包数上限
@@ -196,7 +197,12 @@ fn send_inner_sock(
   let full_nblk =
     u32::try_from(full_total.div_ceil(BLK as u64)).map_err(|_| UdpError::Arg("文件过大"))?;
   let is_loop = peer.ip().is_loopback();
-  let mut src = Src::new(kind, entries, full_spans, full_total, skip_all)?;
+  let init_pkt = if is_tunnel_path(sock, peer) && var_os("S0_FORCE_1200").is_some() {
+    TUNNEL_PKT
+  } else {
+    PKT
+  };
+  let mut src = Src::new(kind, entries, full_spans, full_total, skip_all, init_pkt)?;
   if is_loop {
     src.set_net_state(250_000_000, 0);
   }
@@ -248,6 +254,7 @@ fn send_inner_sock(
     sender,
     peer,
     src,
+    pkt_size: init_pkt,
     pkt_buf: [0u8; DGRAM],
     done_lo: 0,
     credit: 512,
@@ -257,9 +264,6 @@ fn send_inner_sock(
     backoff: 0,
     lost: VecDeque::new(),
     lost_pns: Vec::new(),
-    rack_lost: 0,
-    spurious: 0,
-    ack_trunc: 0,
     inflight: 0,
     packets: 0,
     retx: 0,
@@ -269,12 +273,9 @@ fn send_inner_sock(
   };
 
   let no_rack = var_os("S0_NO_RACK").is_some();
-  let dbg = var_os("S0_DEBUG").is_some();
   let mut next_send = start_dbg;
   let mut next_blk = 0u32;
   let mut small_dup_done = false;
-  let mut stall_pkts = 0u64;
-  let mut last_dbg = start_dbg;
   let mut last_stall = start_dbg;
   let mut buf = [0u8; DGRAM];
   let mut last_done_lo = 0u32;
@@ -342,7 +343,8 @@ fn send_inner_sock(
         } else if !is_loop {
           next_send = burst_base + u64::from(cnt) * gap;
         }
-        let quantum = tx.cc.burst(PKT as u64, tx.sender.rtt(), is_loop) as u8;
+        let pkt_before = tx.pkt_size;
+        let quantum = tx.cc.burst(pkt_before as u64, tx.sender.rtt(), is_loop) as u8;
         for idx in 0..cnt {
           if !is_loop && rate == 0 && idx > 0 && idx.is_multiple_of(quantum) {
             let sub_target = burst_base + u64::from(idx) * gap;
@@ -353,9 +355,16 @@ fn send_inner_sock(
             send_at = now_us();
           }
           tx.send(next_blk, idx, send_at, false)?;
+          if tx.pkt_size != pkt_before {
+            break;
+          }
           if !is_loop && next_blk + 1 == nblk && idx + 2 >= cnt && cnt > 2 {
             tx.send(next_blk, idx, send_at, true)?;
           }
+        }
+        if tx.pkt_size != pkt_before {
+          next_blk = tx.done_lo;
+          continue;
         }
         next_blk += 1;
         sent_blk = true;
@@ -415,34 +424,21 @@ fn send_inner_sock(
       && now.saturating_sub(last_progress) > stall_us
       && now.saturating_sub(last_stall) > stall_us
     {
-      let lo = tx.done_lo;
-      let mask = tx.missing_mask(lo);
-      let n = if mask == 0 {
-        tx.resend_all(lo, now)?
-      } else {
-        tx.resend_missing(lo, mask, now)?
-      };
-      stall_pkts += n;
       if !tx.got_ack {
         tx.backoff = (tx.backoff + 1).min(4);
+        if tx.pkt_size > TUNNEL_PKT {
+          tx.downgrade_mtu();
+          next_blk = tx.done_lo;
+        }
+      }
+      let lo = tx.done_lo;
+      let mask = tx.missing_mask(lo);
+      if mask == 0 {
+        tx.resend_all(lo, now)?;
+      } else {
+        tx.resend_missing(lo, mask, now)?;
       }
       last_stall = now;
-    }
-
-    if dbg && now.saturating_sub(last_dbg) > 1_000_000 {
-      log::debug!(
-        "DBG t={}ms done_lo={} next_blk={next_blk} credit={} cwnd={cwnd} packets={} retx={} rack={} spurious={} stall={stall_pkts} rtt_min={} reo={}",
-        now.saturating_sub(start_dbg) / 1000,
-        tx.done_lo,
-        tx.credit,
-        tx.packets,
-        tx.retx,
-        tx.rack_lost,
-        tx.spurious,
-        tx.sender.rtt().rtt_min_us(),
-        tx.sender.rtt().reo_wnd_us()
-      );
-      last_dbg = now;
     }
 
     let idle_timeout = tx.idle_timeout_us();
@@ -466,20 +462,6 @@ fn send_inner_sock(
 
   if let Some(b) = bar.as_mut() {
     b.finish(total, tx.retx, tx.packets);
-  }
-  if dbg {
-    log::debug!(
-      "DBG done_lo={} packets={} retx={} rack_lost={} spurious={} ack_trunc={} stall_pkts={stall_pkts} rtt_min={} reo={} srtt={}",
-      tx.done_lo,
-      tx.packets,
-      tx.retx,
-      tx.rack_lost,
-      tx.spurious,
-      tx.ack_trunc,
-      tx.sender.rtt().rtt_min_us(),
-      tx.sender.rtt().reo_wnd_us(),
-      tx.sender.rtt().srtt_us()
-    );
   }
   Ok(Stats {
     bytes: logical_total,

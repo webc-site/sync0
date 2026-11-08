@@ -193,6 +193,30 @@ impl SharedSink {
     self.block_map.get(block_idx as usize).copied()
   }
 
+  /// 获取全局块 `block_idx` 的原始字节长度
+  #[inline]
+  pub fn block_size(&self, block_idx: u32) -> u32 {
+    self
+      .block_map
+      .get(block_idx as usize)
+      .map_or(0, |loc| loc.len)
+  }
+
+  /// 计算全部块的传输字节权重向量（本地已命中块权重为 `1`，缺失块按真实字节长度 `len.max(1024)` 加权）
+  pub fn block_weights(&self) -> Vec<u64> {
+    let total = self.total_blocks();
+    let mut weights = Vec::with_capacity(total as usize);
+    for b in 0..total {
+      let w = if self.has_block(b) {
+        1
+      } else {
+        u64::from(self.block_size(b)).max(1024)
+      };
+      weights.push(w);
+    }
+    weights
+  }
+
   #[inline]
   pub fn initial_have_bits(&self) -> &[u8] {
     &self.initial_have_bits

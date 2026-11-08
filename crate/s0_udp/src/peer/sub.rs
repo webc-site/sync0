@@ -41,34 +41,14 @@ impl PeerNode {
       opts.clone().with_delete(sel_paths.is_empty()),
     )?;
 
-    let my_ctrl_addrs = self.ctrl_addrs_encoded();
-    let have_req = P2pReq {
-      op: Op::Have,
-      flags: FLAG_SEED,
-      share_id,
-      req_rate: opts.req_rate,
-      paths: sel_paths.clone(),
-      peer_addrs: my_ctrl_addrs.clone(),
-      profile_card: self.profile_bytes.clone(),
-      range: Some((initial.root_hash, 0, initial.total_blocks)),
-      token: opts.token,
-    };
     let mut stream = self.connect_peer(&origin_id)?;
-    let _ = write_frame(&mut stream, &have_req.encode()?);
-    if let Ok(raw) = read_frame(&mut stream)
-      && let Ok(resp) = P2pResp::decode(&raw)
-    {
-      self.ingest_resp_profiles(&resp, true);
-      self.ingest_swarm_seeds(share_id, initial.root_hash, &resp.peers);
-    }
-
     let req = P2pReq {
       op: Op::Sub,
       flags: FLAG_SEED,
       share_id,
       req_rate: opts.req_rate,
       paths: sel_paths,
-      peer_addrs: my_ctrl_addrs,
+      peer_addrs: self.ctrl_addrs_encoded(),
       profile_card: self.profile_bytes.clone(),
       range: Some((initial.root_hash, 0, initial.total_blocks)),
       token: opts.token,
@@ -217,7 +197,14 @@ impl PeerNode {
         let _ = stream.set_nodelay(true);
         if write_frame(&mut stream, &push_ev.encode()?).is_ok() && read_frame(&mut stream).is_ok() {
           pushed += 1;
+          continue;
         }
+      }
+      if let Some(st) = self.shares.write().get_mut(&share_id) {
+        st.subscribers
+          .retain(|s| s.ctrl_addr != sub.ctrl_addr && s.endpoint_id != sub.endpoint_id);
+        st.seeds
+          .retain(|s| s.ctrl_addr != sub.ctrl_addr && s.endpoint_id != sub.endpoint_id);
       }
     }
     Ok(pushed)

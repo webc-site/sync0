@@ -18,7 +18,8 @@ use crate::{
     DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, PKT_PUNCH, ZSTD_DEFAULT_LEVEL,
   },
   fs::{FsError, SharedSink},
-  wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch},
+  is_tunnel_addr,
+  wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch, encode_punch_padded},
 };
 
 const MAX_POOL_BUFS: usize = 64;
@@ -80,11 +81,14 @@ pub fn recv_range_udp(
   let mut idle_nacked = false;
   let mut poison_strikes = 0u8;
 
+  let padded_punch = encode_punch_padded(sid24);
   let punch_pkt = encode_punch(sid24);
-  for _ in 0..2 {
-    for &addr in peer_addrs {
-      let _ = sock.send_to(&punch_pkt, addr);
+  for &addr in peer_addrs {
+    if !is_tunnel_addr(addr) {
+      let _ = sock.send_to(&padded_punch, addr);
     }
+    let _ = sock.send_to(&punch_pkt, addr);
+    let _ = sock.send_to(&punch_pkt, addr);
   }
 
   let timeout_us = spec.timeout.as_micros() as u64;
@@ -94,6 +98,9 @@ pub fn recv_range_udp(
       Ok((n, from)) => {
         if n > 0 && pkt_buf[0] == PKT_PUNCH {
           if decode_punch(&pkt_buf[..n]) == Ok(sid24) {
+            if !is_tunnel_addr(from) {
+              let _ = sock.send_to(&padded_punch, from);
+            }
             let _ = sock.send_to(&punch_pkt, from);
             update_locked_peer(&mut locked_peer, from);
           }

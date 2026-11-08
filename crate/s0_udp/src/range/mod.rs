@@ -2,7 +2,7 @@ mod rx;
 mod tx;
 
 use std::{
-  net::{IpAddr, SocketAddr},
+  net::{SocketAddr, UdpSocket},
   time::Duration,
 };
 
@@ -12,29 +12,27 @@ pub use tx::send_range_udp;
 use crate::{
   bench::{now_us, wait_until},
   consts::DEFAULT_SEG_PAYLOAD,
+  is_tunnel_addr, is_tunnel_path,
 };
 
-/// 隧道/Overlay 网卡（Tailscale / WireGuard / IPv6 最小 MTU 1280）单包有效载荷上限（`1200 + 12 + 48 = 1260 <= 1280`，彻底消除 IP 分片丢包，且 `65536 / 1200 = 55 <= 64` 满足 64-bit 分片位图上限）
+/// 隧道/Overlay 网卡（Tailscale / WireGuard / IPv6 最小 MTU 1280）单包有效载荷上限（`1200 + 20 = 1220 <= 1280`，彻底消除 IP 分片丢包，且 `65536 / 1200 = 55 <= 64` 满足 64-bit 分片位图上限）
 pub(crate) const TUNNEL_SEG_PAYLOAD: usize = 1200;
 
 #[inline]
 pub(crate) const fn seg_payload_for_addr(addr: SocketAddr) -> usize {
-  match addr.ip() {
-    IpAddr::V4(v4) => {
-      let oct = v4.octets();
-      if oct[0] == 100 && (oct[1] & 0xC0) == 64 {
-        TUNNEL_SEG_PAYLOAD
-      } else {
-        DEFAULT_SEG_PAYLOAD
-      }
-    }
-    IpAddr::V6(v6) => {
-      if (v6.segments()[0] & 0xFE00) == 0xFC00 {
-        TUNNEL_SEG_PAYLOAD
-      } else {
-        DEFAULT_SEG_PAYLOAD
-      }
-    }
+  if is_tunnel_addr(addr) {
+    TUNNEL_SEG_PAYLOAD
+  } else {
+    DEFAULT_SEG_PAYLOAD
+  }
+}
+
+#[inline]
+pub(crate) fn seg_payload_for_sock(sock: &UdpSocket, peer: SocketAddr) -> usize {
+  if is_tunnel_path(sock, peer) {
+    TUNNEL_SEG_PAYLOAD
+  } else {
+    DEFAULT_SEG_PAYLOAD
   }
 }
 

@@ -386,7 +386,9 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           let mut guard = ctx.shares.write();
           if let Some(st) = guard.get_mut(&req.share_id) {
             if is_sub {
-              st.subscribers.retain(|s| s.ctrl_addr != peer_ctrl);
+              st.subscribers.retain(|s| {
+                s.ctrl_addr != peer_ctrl && (remote_id == [0u8; 32] || s.endpoint_id != remote_id)
+              });
               st.subscribers.push(SubscriberRecord {
                 endpoint_id: remote_id,
                 ctrl_addr: peer_ctrl,

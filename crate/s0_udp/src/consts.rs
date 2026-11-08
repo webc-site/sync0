@@ -88,8 +88,10 @@ pub const DIR_ACK_HDR_LEN: usize = 8;
 
 /// UDP 最大报文缓冲长度（2048 B）
 pub const MAX_DATAGRAM: usize = 2048;
-/// 默认单包载荷长度（1400 B）
+/// 默认单包载荷长度（1400 B，标准以太网最大吞吐）
 pub const DEFAULT_PKT: usize = 1400;
+/// 隧道/Overlay 网卡与 IPv6 最小 MTU (1280 B) 零分片安全单包载荷长度（1200 B）
+pub const TUNNEL_PKT: usize = 1200;
 /// 默认数据块字节上限（128 KiB）
 pub const MAX_BLOCK: usize = 128 * 1024;
 /// 单块最大分片位图槽位数（128，对应 `u128` 块位图）

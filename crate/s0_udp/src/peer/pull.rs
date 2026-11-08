@@ -14,7 +14,8 @@ use parking_lot::Mutex;
 use s0_cdc::for_each_missing_span;
 
 use super::{
-  PeerError, PeerId, plan_stripes, rank_swarm_peers, register_iroh_endpoint, resolve_iroh_endpoint,
+  PeerError, PeerId, plan_stripes_weighted, rank_swarm_peers, register_iroh_endpoint,
+  resolve_iroh_endpoint,
 };
 use crate::{
   RangeSpec, UdpError, bind_udp_for_ip,
@@ -27,8 +28,9 @@ use crate::{
 
 /// 单帧控制面消息最大字节数上限（64 MiB，防止恶意帧长度触发 OOM）
 pub(crate) const MAX_CTRL_FRAME_LEN: usize = 64 * 1024 * 1024;
-/// 动态折半抢占 Work-Stealing 的最小剩余块数阈值（低于该阈值免抢占以消除握手开销）
+/// 动态折半抢占 Work-Stealing 的最小剩余块数或字节阈值（低于阈值免抢占以消除握手开销）
 const MIN_STEAL_BLOCKS: u32 = 64;
+const MIN_STEAL_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone, Copy)]
 pub(crate) struct RangePullJob<'a> {
@@ -163,7 +165,8 @@ pub(crate) fn execute_striped_pull(
     return Err(PeerError::NoHealthyPeer);
   }
 
-  let stripes = plan_stripes(local_region, &ranked, total_blocks);
+  let block_weights = base_job.sink.block_weights();
+  let stripes = plan_stripes_weighted(local_region, &ranked, &block_weights);
   let peers_used = stripes.len();
   let per_stripe_rate = base_job.req_rate;
   let stripe_bounds: Arc<Vec<(AtomicU32, AtomicU32)>> = Arc::new(
@@ -310,7 +313,7 @@ fn try_steal_tail(
   thief: &SwarmPeer,
 ) -> Option<(u32, u32)> {
   let have = sink.snapshot_have_bits();
-  let mut best: Option<(usize, u32, u32, u32)> = None;
+  let mut best: Option<(usize, u32, u32, u64)> = None;
   for (idx, (lo_atom, hi_atom)) in bounds.iter().enumerate() {
     let lo = lo_atom.load(Ordering::Acquire);
     let hi = hi_atom.load(Ordering::Acquire);
@@ -318,19 +321,23 @@ fn try_steal_tail(
       continue;
     }
     let mut first_missing = hi;
-    for_each_missing_span(&have, lo, hi, |m_lo, _m_hi| {
+    let mut rem_bytes = 0u64;
+    for_each_missing_span(&have, lo, hi, |m_lo, m_hi| {
       if m_lo < first_missing {
         first_missing = m_lo;
       }
+      for b in m_lo..m_hi {
+        rem_bytes += u64::from(sink.block_size(b)).max(1024);
+      }
     });
     let rem = hi.saturating_sub(first_missing);
-    if rem >= MIN_STEAL_BLOCKS {
+    if rem >= 4 && (rem >= MIN_STEAL_BLOCKS || rem_bytes >= MIN_STEAL_BYTES) {
       let mid = first_missing + (rem >> 1);
       if thief.blk_lo <= mid
         && thief.blk_hi >= hi
-        && best.is_none_or(|(_, _, _, best_rem)| rem > best_rem)
+        && best.is_none_or(|(_, _, _, best_bytes)| rem_bytes > best_bytes)
       {
-        best = Some((idx, mid, hi, rem));
+        best = Some((idx, mid, hi, rem_bytes));
       }
     }
   }

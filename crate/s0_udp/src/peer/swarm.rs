@@ -41,6 +41,20 @@ pub fn plan_stripes(
   peers: &[SwarmPeer],
   total_blocks: u32,
 ) -> Vec<(usize, u32, u32)> {
+  plan_stripes_weighted(local_region, peers, &vec![1u64; total_blocks as usize])
+}
+
+/// 按各块的真实字节权重 `block_weights` 与节点得分比例将 `[0, block_weights.len())` 切分为不相交的条带区间 `[(peer_idx, blk_lo, blk_hi)]`
+///
+/// 消除「大文件 + 海量小文件」混合负载下按块数均分导致的 32 倍字节偏斜：
+/// - 构造严格单调递增的累积权重前缀和 `prefix_w`；
+/// - 对每个节点的累积得分比例目标 `target_w` 执行 $O(\log N)$ 二分查找 (`partition_point`) 并约束在 `[cur + 1, max_next]`，确保 `[0, total_blocks)` 100% 完备覆盖且各条带字节量与节点带宽得分精确成正比。
+pub fn plan_stripes_weighted(
+  local_region: Region,
+  peers: &[SwarmPeer],
+  block_weights: &[u64],
+) -> Vec<(usize, u32, u32)> {
+  let total_blocks = block_weights.len() as u32;
   if total_blocks == 0 || peers.is_empty() {
     return Vec::new();
   }
@@ -49,7 +63,15 @@ pub fn plan_stripes(
     .iter()
     .map(|p| peer_score(local_region, p).max(1))
     .sum();
-  let surplus = u128::from(total_blocks - k as u32);
+
+  let mut prefix_w = Vec::with_capacity(block_weights.len() + 1);
+  prefix_w.push(0u64);
+  let mut acc = 0u64;
+  for &w in block_weights {
+    acc = acc.saturating_add(w.max(1));
+    prefix_w.push(acc);
+  }
+  let total_w = u128::from(acc.max(1));
 
   let mut stripes: Vec<(usize, u32, u32)> = Vec::with_capacity(k);
   let mut prefix_score = 0u128;
@@ -59,8 +81,18 @@ pub fn plan_stripes(
     let next = if i + 1 == k {
       total_blocks
     } else {
-      let extra = ((surplus * prefix_score + (sum_score >> 1)) / sum_score) as u32;
-      ((i as u32 + 1) + extra).clamp(cur + 1, total_blocks)
+      let target_w = ((total_w * prefix_score + (sum_score >> 1)) / sum_score) as u64;
+      let pos = prefix_w.partition_point(|&pw| pw < target_w);
+      let raw_next = if pos > 0
+        && pos <= block_weights.len()
+        && target_w.saturating_sub(prefix_w[pos - 1]) < prefix_w[pos].saturating_sub(target_w)
+      {
+        (pos - 1) as u32
+      } else {
+        pos as u32
+      };
+      let max_next = total_blocks - (k - 1 - i) as u32;
+      raw_next.clamp(cur + 1, max_next)
     };
     if cur < next {
       let chosen = if peer.blk_lo <= cur && peer.blk_hi >= next {

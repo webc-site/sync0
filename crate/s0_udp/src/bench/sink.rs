@@ -214,7 +214,6 @@ impl Sink {
     let mut have_bits = vec![0u8; total_chunks.div_ceil(8)];
     let mut bit_cursor = 0usize;
     let mut delta_total = 0u64;
-
     let mut sk = Self {
       out_root: out.to_path_buf(),
       files: Vec::with_capacity(entries.len()),
@@ -245,27 +244,21 @@ impl Sink {
       } else {
         root_buf.join(&e.path)
       };
-
       if e.del {
         sk.tombstones.push(target.to_path_buf());
         continue;
       }
-
       if e.size == 0 {
-        let same_empty =
-          out_existed && target.metadata().is_ok_and(|m| m.is_file() && m.len() == 0);
-        if !same_empty {
+        if !(out_existed && target.metadata().is_ok_and(|m| m.is_file() && m.len() == 0)) {
           create_trunc(target)?;
         }
         continue;
       }
-
       if !out_existed {
         bit_cursor += e.chunks.len();
         sk.push_full(target.to_path_buf(), e.size, &mut delta_total);
         continue;
       }
-
       if bit_cursor.saturating_add(e.chunks.len()) <= max_bits {
         if let Some(&pre) = prechecked.get(idx) {
           match pre {
@@ -299,7 +292,6 @@ impl Sink {
               SinglePrecheck::Fallback => {}
             }
           }
-
           let plan = match_basis_file(
             &e.chunks,
             (&basis_file, basis_size),
@@ -309,22 +301,18 @@ impl Sink {
             &mut bit_cursor,
             &mut delta_total,
           )?;
-
-          let in_place = plan.delta_bytes == 0
+          if plan.delta_bytes == 0
             && basis_size == e.size
             && plan.copy_spans.len() == 1
             && plan.copy_spans[0].src_off == 0
             && plan.copy_spans[0].dst_off == 0
-            && plan.copy_spans[0].len == e.size;
-
-          if in_place {
+            && plan.copy_spans[0].len == e.size
+          {
             continue;
           }
-
           sk.apply_plan(plan, Some(basis_file), target.to_path_buf(), e.size)?;
           continue;
         }
-
         if !single_file {
           let (pool, _) = match &mut dir_basis {
             Some(p) => p,
@@ -343,11 +331,9 @@ impl Sink {
           }
         }
       }
-
       bit_cursor += e.chunks.len();
       sk.push_full(target.to_path_buf(), e.size, &mut delta_total);
     }
-
     if let Some((_, p)) = dir_basis {
       sk.pool_paths = p;
     }

@@ -9,12 +9,13 @@ use s0_cc::Cc;
 use s0_cdc::SliceWr as Wr;
 
 use super::{
-  DGRAM, PKT, now_us, send_udp,
+  DGRAM, TUNNEL_PKT, now_us, send_udp,
   source::{Src, cnt_mask},
 };
 use crate::{
   AckGen, Sender, UdpError,
-  consts::{MAX_RANGES, RETX, ZSTD},
+  consts::{RETX, ZSTD},
+  is_emsgsize,
   wire::{Ack, Kind, SessionHeader, StreamDataHeader as DataHeader},
 };
 
@@ -38,6 +39,7 @@ pub(super) struct Tx<'a> {
   pub(super) sender: Sender,
   pub(super) peer: SocketAddr,
   pub(super) src: Src,
+  pub(super) pkt_size: usize,
   pub(super) pkt_buf: [u8; DGRAM],
   pub(super) done_lo: u32,
   pub(super) credit: u32,
@@ -47,9 +49,6 @@ pub(super) struct Tx<'a> {
   pub(super) backoff: u32,
   pub(super) lost: VecDeque<(u32, u8)>,
   pub(super) lost_pns: Vec<u64>,
-  pub(super) rack_lost: u64,
-  pub(super) spurious: u64,
-  pub(super) ack_trunc: u64,
   pub(super) inflight: u64,
   pub(super) packets: u64,
   pub(super) retx: u64,
@@ -59,6 +58,15 @@ pub(super) struct Tx<'a> {
 }
 
 impl Tx<'_> {
+  pub(super) fn downgrade_mtu(&mut self) {
+    if self.pkt_size > TUNNEL_PKT {
+      self.pkt_size = TUNNEL_PKT;
+      self.src.downgrade_pkt_size(TUNNEL_PKT);
+      self.lost.clear();
+      self.inflight = 0;
+    }
+  }
+
   pub(super) const fn est_rtt_us(&self) -> u64 {
     let srtt = self.sender.rtt().srtt_us();
     if srtt > 0 {
@@ -81,16 +89,16 @@ impl Tx<'_> {
 
   pub(super) fn cwnd(&self) -> u64 {
     let init = (self.est_rtt_us() / self.init_gap_us()).clamp(INIT_CWND, MAX_INIT_CWND);
-    self
-      .cc
-      .cwnd_bytes(self.sender.rtt())
-      .map_or(init, |b| (b / PKT as u64).clamp(MIN_CWND, MAX_CWND))
+    self.cc.cwnd_bytes(self.sender.rtt()).map_or(init, |b| {
+      (b / self.pkt_size as u64).clamp(MIN_CWND, MAX_CWND)
+    })
   }
 
   pub(super) fn pkt_gap_us(&self) -> u64 {
+    let pkt_sz = self.pkt_size as u64;
     self.cc.pacing_rate(self.sender.rtt()).map_or_else(
       || self.init_gap_us(),
-      |r| (PKT as u64 * 1_000_000 / r.max(1)).clamp(MIN_GAP_US, MAX_GAP_US),
+      |r| (pkt_sz * 1_000_000 / r.max(1)).clamp(MIN_GAP_US, MAX_GAP_US),
     )
   }
 
@@ -130,9 +138,6 @@ impl Tx<'_> {
           let first_ack = !self.got_ack;
           self.got_ack = true;
           self.backoff = 0;
-          if ack.nr as usize >= MAX_RANGES {
-            self.ack_trunc += 1;
-          }
           self.done_lo = self.done_lo.max(ack.done_lo);
           self.credit = self.credit.max(ack.credit);
           let rx_now = now_us();
@@ -208,9 +213,7 @@ impl Tx<'_> {
               self.lost.push_back((i.blk, i.idx));
             }
           }
-          self.rack_lost += lost_pns.len() as u64;
           self.lost_pns = lost_pns;
-          self.spurious += u64::from(st.spurious);
           self.inflight = self
             .inflight
             .saturating_sub(u64::from(st.acked) + u64::from(st.lost));
@@ -282,9 +285,13 @@ impl Tx<'_> {
     now: u64,
     retx: bool,
   ) -> Result<usize, UdpError> {
+    let pkt_sz = self.pkt_size;
     let b = self.src.get(blk)?;
-    let start = usize::from(idx) * PKT;
-    let end = (start + PKT).min(b.data.len());
+    let start = usize::from(idx) * pkt_sz;
+    if start >= b.data.len() {
+      return Ok(0);
+    }
+    let end = (start + pkt_sz).min(b.data.len());
     let payload_len = end - start;
     let flag = if retx { RETX } else { 0 } | if b.zstd { ZSTD } else { 0 };
     let cnt = b.cnt;
@@ -306,7 +313,16 @@ impl Tx<'_> {
     if retx && let Some(t) = b.last_retx.get_mut(usize::from(idx)) {
       *t = now.max(2);
     }
-    send_udp(self.sock, &self.pkt_buf[..n], self.peer)?;
+    if let Err(e) = send_udp(self.sock, &self.pkt_buf[..n], self.peer) {
+      if let UdpError::Io(ref io_err) = e
+        && is_emsgsize(io_err)
+        && self.pkt_size > TUNNEL_PKT
+      {
+        self.downgrade_mtu();
+        return Ok(0);
+      }
+      return Err(e);
+    }
     self.packets += 1;
     self.inflight += 1;
     self.retx += u64::from(retx);

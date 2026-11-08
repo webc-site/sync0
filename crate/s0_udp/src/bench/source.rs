@@ -2,9 +2,7 @@ use std::fs::File;
 
 use s0_cdc::{FileAt, for_each_missing_data_span};
 
-use super::{
-  BLK, EMPTY, MAX_CNT, PKT, RootBuf, WINDOW_BLOCKS, ZSTD_LEVEL, manifest::Entry, now_us,
-};
+use super::{BLK, EMPTY, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_LEVEL, manifest::Entry, now_us};
 use crate::{
   UdpError,
   codec::{Codec, Detector, LevelChoice, Policy, skip_name},
@@ -89,6 +87,7 @@ pub(super) struct Src {
   spans: Vec<TxSpan>,
   span_hint: usize,
   total: u64,
+  pkt_size: usize,
   codec: Option<Codec>,
   detector: Detector,
   policy: Policy,
@@ -109,6 +108,7 @@ impl Src {
     spans: Vec<TxSpan>,
     total: u64,
     skip_all: bool,
+    pkt_size: usize,
   ) -> Result<Self, UdpError> {
     let check_magic = matches!(kind, SrcKind::File(_));
     let codec = (!skip_all).then(|| Codec::new(ZSTD_LEVEL)).transpose()?;
@@ -130,6 +130,7 @@ impl Src {
       spans,
       span_hint: 0,
       total,
+      pkt_size,
       codec,
       detector,
       policy,
@@ -137,6 +138,20 @@ impl Src {
       open: None,
       slots,
     })
+  }
+
+  /// 动态降级分片大小（如 1400B -> 1200B）：直接复用窗口槽位内已读取/压缩的数据重新计算分片数 `cnt`，零二次磁盘读取与零重压缩
+  pub(super) fn downgrade_pkt_size(&mut self, new_pkt: usize) {
+    if new_pkt < self.pkt_size {
+      self.pkt_size = new_pkt;
+      for s in &mut self.slots {
+        if s.blk != EMPTY {
+          s.cnt = s.data.len().div_ceil(new_pkt) as u8;
+          s.have = 0;
+          s.last_retx[..usize::from(s.cnt)].fill(0);
+        }
+      }
+    }
   }
 
   /// 当接收端回传非空 `have_bits`（增量同步）时，重置虚拟流区间并失效预热槽位
@@ -288,7 +303,7 @@ impl Src {
         false
       };
       slot.zstd = zstd;
-      slot.cnt = slot.data.len().div_ceil(PKT) as u8;
+      slot.cnt = slot.data.len().div_ceil(self.pkt_size) as u8;
       slot.have = 0;
       slot.last_retx[..usize::from(slot.cnt)].fill(0);
       slot.blk = blk;
