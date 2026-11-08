@@ -1,119 +1,19 @@
 use std::{
-  cell::UnsafeCell,
   fs::{self, File, OpenOptions},
-  io,
   path::{Path, PathBuf},
-  ptr::copy_nonoverlapping,
-  slice::from_raw_parts,
   sync::atomic::{AtomicU64, Ordering},
-  thread,
 };
 
 use s0_cdc::{
   BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, copy_file_span, hash128, match_basis_file,
 };
 
-use super::{FsError, fd_cache::FdCache, prune_dir, remove, sanitize_rel_path};
-use crate::bench::par_chunk_plan;
-
-/// 小文件内存聚合池上限（8 MiB）：超过该阈值自动切换为单文件流 `.s0_pack.tmp` 顺序/偏移写入，彻底杜绝内存爆炸
-const MAX_MEM_PACK_BYTES: u64 = 8 << 20;
-const UNPACKED_OFFSET: u64 = u64::MAX;
-
-/// 无锁不相交区间内存池（每个单块小文件拥有唯一、互不重叠的 `[off, off + len)` 切片，且由 `have_words` Release/Acquire 原子位同步）
-struct DisjointArena {
-  buf: Box<[UnsafeCell<u8>]>,
-}
-
-// SAFETY: 每个 `entry_idx` 在 `prepare` 阶段被分配严格不相交的 `[pack_off, pack_off + size)` 区间，
-// 写入由 `write_verified_block` 完成并经 `have_words.fetch_or(..., Release)` 发布，
-// 读取前必须先通过 `has_block` (`Acquire`) 校验，因此不存在数据竞争。
-unsafe impl Sync for DisjointArena {}
-unsafe impl Send for DisjointArena {}
-
-impl DisjointArena {
-  fn new(len: usize) -> Self {
-    let mut v = Vec::with_capacity(len);
-    v.resize_with(len, || UnsafeCell::new(0));
-    Self {
-      buf: v.into_boxed_slice(),
-    }
-  }
-
-  #[inline]
-  unsafe fn write_at(&self, off: usize, data: &[u8]) {
-    let dst = unsafe { (self.buf.as_ptr() as *mut u8).add(off) };
-    unsafe {
-      copy_nonoverlapping(data.as_ptr(), dst, data.len());
-    }
-  }
-
-  #[inline]
-  unsafe fn slice_at(&self, off: usize, len: usize) -> &[u8] {
-    let ptr = unsafe { (self.buf.as_ptr() as *const u8).add(off) };
-    unsafe { from_raw_parts(ptr, len) }
-  }
-}
-
-/// 小文件聚合流存储后端：
-/// - `<= 8 MiB`：单次分配定长连续内存池 (`Mem`)，零碎片；
-/// - `> 8 MiB`：单文件流 `.s0_pack.tmp` (`StreamFile`)，`pwrite`/`pread` 直接落盘，内存占用 $O(1)$。
-enum SmallPack {
-  Empty,
-  Mem(DisjointArena),
-  StreamFile { file: File, path: PathBuf },
-}
-
-impl SmallPack {
-  fn create(root: &Path, total_bytes: u64) -> io::Result<Self> {
-    if total_bytes == 0 {
-      return Ok(Self::Empty);
-    }
-    if total_bytes <= MAX_MEM_PACK_BYTES {
-      return Ok(Self::Mem(DisjointArena::new(total_bytes as usize)));
-    }
-    let path = root.join(".s0_pack.tmp");
-    let file = OpenOptions::new()
-      .create(true)
-      .truncate(true)
-      .read(true)
-      .write(true)
-      .open(&path)?;
-    file.set_len(total_bytes)?;
-    Ok(Self::StreamFile { file, path })
-  }
-
-  #[inline]
-  fn write_at(&self, off: u64, data: &[u8]) -> io::Result<()> {
-    match self {
-      Self::Empty => Ok(()),
-      Self::Mem(arena) => {
-        unsafe { arena.write_at(off as usize, data) };
-        Ok(())
-      }
-      Self::StreamFile { file, .. } => file.write_all_at_pos(data, off),
-    }
-  }
-
-  #[inline]
-  fn read_at(&self, off: u64, dst: &mut [u8]) -> io::Result<()> {
-    match self {
-      Self::Empty => Err(io::Error::from(io::ErrorKind::UnexpectedEof)),
-      Self::Mem(arena) => {
-        let src = unsafe { arena.slice_at(off as usize, dst.len()) };
-        dst.copy_from_slice(src);
-        Ok(())
-      }
-      Self::StreamFile { file, .. } => file.read_exact_at_pos(dst, off),
-    }
-  }
-
-  fn cleanup(&self) {
-    if let Self::StreamFile { path, .. } = self {
-      let _ = fs::remove_file(path);
-    }
-  }
-}
+use super::{
+  FsError,
+  fd_cache::FdCache,
+  pack::{SmallPack, UNPACKED_OFFSET},
+  prune_dir, remove, sanitize_rel_path,
+};
 
 /// 支持多个对等节点并发无锁写入与边下边传读取的接收池 (`SharedSink`)
 ///
@@ -324,6 +224,24 @@ impl SharedSink {
       .is_some_and(|w| (w.load(Ordering::Acquire) & bit) != 0)
   }
 
+  /// 计算当前已校验落盘的总块数（用于实时边下边传汇报）
+  pub fn verified_block_count(&self) -> u32 {
+    let total = self.total_blocks();
+    let full_words = (total >> 6) as usize;
+    let rem_bits = total & 63;
+    let mut done = 0u32;
+    for w in &self.have_words[..full_words] {
+      done += w.load(Ordering::Acquire).count_ones();
+    }
+    if rem_bits > 0
+      && let Some(last) = self.have_words.get(full_words)
+    {
+      let mask = (1u64 << rem_bits) - 1;
+      done += (last.load(Ordering::Acquire) & mask).count_ones();
+    }
+    done
+  }
+
   /// 判断区间 `[blk_lo, blk_hi)` 内所有块是否全部到位（$O((\text{hi}-\text{lo})/64)$ 64 位字长掩码判定）
   pub fn is_range_complete(&self, blk_lo: u32, blk_hi: u32) -> bool {
     let hi = blk_hi.min(self.total_blocks());
@@ -462,18 +380,7 @@ impl SharedSink {
   /// 校验全部块到位后，从 `SmallPack`（内存池或 `.s0_pack.tmp` 文件流）并发落盘小文件并将 `.s0tmp` 原子重命名为最终文件
   pub fn commit(&self) -> Result<(), FsError> {
     let total = self.total_blocks();
-    let full_words = (total >> 6) as usize;
-    let rem_bits = total & 63;
-    let mut done = 0u32;
-    for w in &self.have_words[..full_words] {
-      done += w.load(Ordering::Acquire).count_ones();
-    }
-    if rem_bits > 0
-      && let Some(last) = self.have_words.get(full_words)
-    {
-      let mask = (1u64 << rem_bits) - 1;
-      done += (last.load(Ordering::Acquire) & mask).count_ones();
-    }
+    let done = self.verified_block_count();
     if done != total {
       return Err(FsError::IncompleteCommit(done, total));
     }
@@ -519,32 +426,7 @@ impl SharedSink {
       }
     }
 
-    if !pack_jobs.is_empty() {
-      match &self.small_pack {
-        SmallPack::Empty => {}
-        SmallPack::Mem(arena) => {
-          run_pack_workers(&pack_jobs, |slice| {
-            for &(ref path, off, len) in slice {
-              let bytes = unsafe { arena.slice_at(off as usize, len as usize) };
-              fs::write(path, bytes)?;
-            }
-            Ok(())
-          })?;
-        }
-        SmallPack::StreamFile { file, .. } => {
-          run_pack_workers(&pack_jobs, |slice| {
-            let mut buf = Vec::with_capacity(64 * 1024);
-            for &(ref path, off, len) in slice {
-              buf.resize(len as usize, 0);
-              file.read_exact_at_pos(&mut buf, off)?;
-              fs::write(path, &buf)?;
-            }
-            Ok(())
-          })?;
-        }
-      }
-      self.small_pack.cleanup();
-    }
+    self.small_pack.flush_jobs(&pack_jobs)?;
 
     if need_prune {
       prune_dir(&self.root, &keep_paths)?;
@@ -552,38 +434,6 @@ impl SharedSink {
 
     Ok(())
   }
-}
-
-fn run_pack_workers<F>(jobs: &[(PathBuf, u64, u32)], flush_chunk: F) -> Result<(), FsError>
-where
-  F: Fn(&[(PathBuf, u64, u32)]) -> io::Result<()> + Sync,
-{
-  let (workers, chunk_sz) = par_chunk_plan(jobs.len());
-  if workers <= 1 {
-    flush_chunk(jobs)?;
-    return Ok(());
-  }
-  let mut first_err: Option<io::Error> = None;
-  thread::scope(|s| {
-    let mut handles = Vec::with_capacity(workers);
-    for slice in jobs.chunks(chunk_sz) {
-      handles.push(s.spawn(|| flush_chunk(slice)));
-    }
-    for h in handles {
-      match h.join() {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) if first_err.is_none() => first_err = Some(e),
-        Err(_) if first_err.is_none() => {
-          first_err = Some(io::Error::other("small file pack flush worker panic"));
-        }
-        _ => {}
-      }
-    }
-  });
-  if let Some(e) = first_err {
-    return Err(FsError::Io(e));
-  }
-  Ok(())
 }
 
 impl Drop for SharedSink {

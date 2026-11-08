@@ -1,6 +1,7 @@
 mod ackgen;
 pub mod bench;
 pub mod codec;
+pub mod compio_io;
 pub mod consts;
 pub mod fs;
 pub mod peer;
@@ -148,17 +149,44 @@ const fn is_ula_v6(ip: Ipv6Addr) -> bool {
   (ip.segments()[0] & 0xFE00) == 0xFC00
 }
 
+/// 判断 IPv4 地址是否为可直接路由的公网地址（排除 RFC1918 私网、回环、链路本地与 `100.64.0.0/10` CGNAT/Tailscale 隧道网段）
+#[inline]
+pub const fn is_global_v4(ip: Ipv4Addr) -> bool {
+  let oct = ip.octets();
+  !ip.is_private()
+    && !ip.is_loopback()
+    && !ip.is_link_local()
+    && !ip.is_unspecified()
+    && !ip.is_broadcast()
+    && !(oct[0] == 100 && (oct[1] & 0xC0) == 64)
+}
+
+/// 判断地址是否位于 Overlay 虚拟隧道网段（`100.64.0.0/10` 或 IPv6 ULA `fc00::/7`）
+#[inline]
+pub const fn is_tunnel_addr(addr: SocketAddr) -> bool {
+  match addr.ip() {
+    IpAddr::V4(v4) => {
+      let oct = v4.octets();
+      oct[0] == 100 && (oct[1] & 0xC0) == 64
+    }
+    IpAddr::V6(v6) => is_ula_v6(v6),
+  }
+}
+
 /// 根据控制流本地 IP 与已绑定 UDP 端口生成候选打洞地址列表编码
 pub fn encode_udp_addrs_for_ip(local_ip: IpAddr, local_port: u16) -> Vec<u8> {
   let mut addrs = Vec::with_capacity(4);
+  if !local_ip.is_unspecified() {
+    addrs.push(SocketAddr::new(local_ip, local_port));
+  }
   if let IpAddr::V6(v6) = local_ip
     && is_ula_v6(v6)
     && let Some(ext_v6) = cached_outbound_v6()
   {
-    addrs.push(SocketAddr::new(IpAddr::V6(ext_v6), local_port));
-  }
-  if !local_ip.is_unspecified() {
-    addrs.push(SocketAddr::new(local_ip, local_port));
+    let ext = SocketAddr::new(IpAddr::V6(ext_v6), local_port);
+    if !addrs.contains(&ext) {
+      addrs.push(ext);
+    }
   }
   if local_ip.is_loopback() || local_ip.is_unspecified() {
     if local_ip.is_ipv6() {
@@ -235,8 +263,10 @@ pub fn punch_udp(
     return Err(UdpError::NoPeerAddr);
   }
   let pkt = encode_punch(session_id);
-  for _ in 0..3 {
-    let _ = sock.send_to(&pkt, addrs[0]);
+  for _ in 0..2 {
+    for &addr in &addrs {
+      let _ = sock.send_to(&pkt, addr);
+    }
   }
   Ok(addrs)
 }

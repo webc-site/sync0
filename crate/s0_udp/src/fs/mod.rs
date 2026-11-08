@@ -1,5 +1,6 @@
 mod fd_cache;
 mod filter;
+mod pack;
 mod path;
 mod sink;
 mod source;

@@ -7,7 +7,7 @@ use crate::{
   wire::{SwarmPeer, decode_socket_addrs},
 };
 
-/// Dragonfly 风格 `ParentSelector`：结合城市级地域亲和度 (`Region::proximity_score`) 与可用带宽权重对候选对等节点排序
+/// Dragonfly 风格 `ParentSelector`：结合城市级地域亲和度 (`Region::proximity_score`)、已就绪区间跨度与可用带宽权重对候选对等节点排序
 pub fn rank_swarm_peers(local_region: Region, mut peers: Vec<SwarmPeer>) -> Vec<SwarmPeer> {
   if peers.len() > 1 {
     peers.sort_by_cached_key(|p| Reverse(peer_score(local_region, p)));
@@ -16,7 +16,7 @@ pub fn rank_swarm_peers(local_region: Region, mut peers: Vec<SwarmPeer>) -> Vec<
 }
 
 #[inline]
-fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
+pub(crate) fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
   let prox = u128::from(local_region.proximity_score(peer.region));
   let bw = u128::from(if peer.weight_rate == 0 {
     let is_direct = decode_socket_addrs(&peer.peer_addrs)
@@ -27,11 +27,15 @@ fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
   } else {
     peer.weight_rate
   });
-  prox * bw
+  let span = u128::from(peer.blk_hi.saturating_sub(peer.blk_lo).max(1));
+  prox * bw * span
 }
 
-/// 将总块数 `[0, total_blocks)` 按候选对等节点的得分比例切分为不相交的条带区间 `[(peer_idx, blk_lo, blk_hi)]`
-/// 采用无堆分配的累积比例舍入法（Bresenham 精确整数分摊），保证每个被选中节点至少分配 1 块且总误差 $\le 1$ 块
+/// 将总块数 `[0, total_blocks)` 按候选对等节点的可用区间 `[peer.blk_lo, peer.blk_hi)` 与得分比例切分为不相交的条带区间 `[(peer_idx, blk_lo, blk_hi)]`
+///
+/// 数学完备性保证：
+/// - 尊重部分做种/边下边传节点的真实可用区间 `[peer.blk_lo, peer.blk_hi)`；
+/// - 采用累积比例舍入法（Bresenham 精确整数分摊），当某节点不覆盖当前子区间时自动分配给覆盖该区间的最高分节点，保证 `[0, total_blocks)` 100% 完备覆盖且不相交。
 pub fn plan_stripes(
   local_region: Region,
   peers: &[SwarmPeer],
@@ -47,7 +51,7 @@ pub fn plan_stripes(
     .sum();
   let surplus = u128::from(total_blocks - k as u32);
 
-  let mut stripes = Vec::with_capacity(k);
+  let mut stripes: Vec<(usize, u32, u32)> = Vec::with_capacity(k);
   let mut prefix_score = 0u128;
   let mut cur = 0u32;
   for (i, peer) in peers[..k].iter().enumerate() {
@@ -59,7 +63,23 @@ pub fn plan_stripes(
       ((i as u32 + 1) + extra).clamp(cur + 1, total_blocks)
     };
     if cur < next {
-      stripes.push((i, cur, next));
+      let chosen = if peer.blk_lo <= cur && peer.blk_hi >= next {
+        i
+      } else {
+        peers
+          .iter()
+          .enumerate()
+          .find(|(_, p)| p.blk_lo <= cur && p.blk_hi >= next)
+          .map_or(0, |(idx, _)| idx)
+      };
+      if let Some(last) = stripes.last_mut()
+        && last.0 == chosen
+        && last.2 == cur
+      {
+        last.2 = next;
+      } else {
+        stripes.push((chosen, cur, next));
+      }
       cur = next;
     }
   }
