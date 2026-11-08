@@ -9,6 +9,7 @@ pub use region::Region;
 pub use wire::{
   Ack, AckOut, AckPkt, Blocks, DataHeader, Items, Kind, NackPkt, P2pReq, P2pResp, Ranges,
   SessionHeader, ShareSummary, StreamDataHeader, SubPush, SwarmPeer, check_ranges, decode_punch,
-  decode_share_summaries, decode_socket_addrs, encode_ack, encode_punch, encode_punch_padded,
-  encode_share_summaries, encode_socket_addrs, expand_pn,
+  decode_raw_socket_addrs, decode_share_summaries, decode_socket_addrs, encode_ack, encode_punch,
+  encode_punch_padded, encode_raw_socket_addrs, encode_share_summaries, encode_socket_addrs,
+  expand_pn,
 };

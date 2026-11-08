@@ -2,6 +2,7 @@ use std::{
   fs,
   iter::repeat_n,
   net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+  sync::Arc,
 };
 
 use aok::{OK, Void};
@@ -22,6 +23,13 @@ use s0_udp::{
 #[ctor::ctor(unsafe)]
 fn _log_init() {
   log_init::init();
+}
+
+fn start_node(name: &str, region: Region) -> Result<Arc<PeerNode>, PeerError> {
+  PeerNode::start(NodeConfig {
+    profile: ProfileDraft::new(name, region),
+    ..Default::default()
+  })
 }
 
 #[test]
@@ -49,10 +57,7 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
       .with_url("https://alice.sync0.io"),
     ..Default::default()
   })?;
-  let node_b = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("bob_shenzhen", Region::Shenzhen),
-    ..Default::default()
-  })?;
+  let node_b = start_node("bob_shenzhen", Region::Shenzhen)?;
   let node_c = PeerNode::start(NodeConfig {
     key_mode: KeyMode::Fixed([0x33; 32]),
     profile: ProfileDraft::new("charlie_tokyo", Region::Tokyo),
@@ -169,26 +174,18 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
   );
 
   // bob 尝试越权上传到 `uploads/alice/hack.txt` 或根目录 `root_hack.txt` -> 被拒绝 (Status::Forbidden)
-  let bob_bad_prefix = node_b.push(
-    alice_id,
-    "priv-vault",
-    &bob_file,
-    TransferOpts::new().with_subpath("uploads/alice/hack.txt"),
-  );
-  assert!(matches!(
-    bob_bad_prefix,
-    Err(PeerError::RemoteStatus(Status::Forbidden))
-  ));
-  let bob_bad_root = node_b.push(
-    alice_id,
-    "priv-vault",
-    &bob_file,
-    TransferOpts::new().with_subpath("root_hack.txt"),
-  );
-  assert!(matches!(
-    bob_bad_root,
-    Err(PeerError::RemoteStatus(Status::Forbidden))
-  ));
+  for bad_sub in ["uploads/alice/hack.txt", "root_hack.txt"] {
+    let res = node_b.push(
+      alice_id,
+      "priv-vault",
+      &bob_file,
+      TransferOpts::new().with_subpath(bad_sub),
+    );
+    assert!(matches!(
+      res,
+      Err(PeerError::RemoteStatus(Status::Forbidden))
+    ));
+  }
 
   // 3.3 默认根目录上传成员 dave (Perm::Rw, write_prefixes = [] 即默认分享根目录) -> 可上传至任意路径
   node_d.push(
@@ -226,21 +223,12 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
   fs::write(origin_dir.path().join("sub/part.txt"), b"v1-sub")?;
   fs::write(origin_dir.path().join("extra/note.md"), b"v1-note")?;
 
-  let origin = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("origin_beijing", Region::Beijing),
-    ..Default::default()
-  })?;
+  let origin = start_node("origin_beijing", Region::Beijing)?;
   origin.add_share(ShareConfig::public_ro("repo", origin_dir.path(), 0));
   let origin_id = origin.endpoint_id();
 
-  let sub_peer1 = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("seed1_shanghai", Region::Shanghai),
-    ..Default::default()
-  })?;
-  let sub_peer2 = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("seed2_shanghai", Region::Shanghai),
-    ..Default::default()
-  })?;
+  let sub_peer1 = start_node("seed1_shanghai", Region::Shanghai)?;
+  let sub_peer2 = start_node("seed2_shanghai", Region::Shanghai)?;
 
   sub_peer1.subscribe(
     origin_id,
@@ -267,10 +255,7 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
   );
   assert!(!sub_part_dir.path().join("big.bin").exists());
 
-  let downloader = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("dl_shanghai", Region::Shanghai),
-    ..Default::default()
-  })?;
+  let downloader = start_node("dl_shanghai", Region::Shanghai)?;
   let rep = downloader.pull(
     origin_id,
     "repo",
@@ -306,18 +291,9 @@ fn test_group_mutual_backup_full_and_multi_select() -> Void {
     tempfile::tempdir()?,
     tempfile::tempdir()?,
   );
-  let p1 = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("p1", Region::Shenzhen),
-    ..Default::default()
-  })?;
-  let p2 = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("p2", Region::HongKong),
-    ..Default::default()
-  })?;
-  let p3 = PeerNode::start(NodeConfig {
-    profile: ProfileDraft::new("p3", Region::Taipei),
-    ..Default::default()
-  })?;
+  let p1 = start_node("p1", Region::Shenzhen)?;
+  let p2 = start_node("p2", Region::HongKong)?;
+  let p3 = start_node("p3", Region::Taipei)?;
 
   let peers = [p1.endpoint_id(), p2.endpoint_id(), p3.endpoint_id()];
   let sel_p3 = vec!["wal".to_owned(), "meta.json".to_owned()];

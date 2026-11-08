@@ -8,14 +8,15 @@ use std::{
 use s0_cdc::{Rd, SliceWr as Wr};
 
 use super::{
-  DGRAM, DIR_ACK, DIR_MAGIC, MANIFEST_CHUNK, MANIFEST_ZSTD, ZSTD_LEVEL,
+  DIR_ACK_MAGIC, DIR_MAGIC, MANIFEST_CHUNK, MANIFEST_ZSTD, MAX_BLOCK, MAX_DATAGRAM,
+  ZSTD_DEFAULT_LEVEL,
   manifest::{HAVE_FLAGS, MAX_MANIFEST_ENCODED, MIN_ZSTD_BYTES},
   now_us, send_udp, wait_until,
 };
 use crate::{
   UdpError,
   codec::{Codec, SLACK},
-  consts::{DIR_ACK_HDR_LEN, DIR_HDR_LEN, HAVE_ALL_ONES_BIT as HAVE_ALL_ONES, MAX_BLOCK},
+  consts::{DIR_ACK_HDR_LEN, DIR_HDR_LEN, HAVE_ALL_ONES_BIT},
 };
 
 pub(super) fn try_build_final_dir_ack(
@@ -26,7 +27,7 @@ pub(super) fn try_build_final_dir_ack(
   while have_bits.last() == Some(&0) {
     have_bits = &have_bits[..have_bits.len() - 1];
   }
-  let max_payload = DGRAM.saturating_sub(base_ack.len() + 4);
+  let max_payload = MAX_DATAGRAM.saturating_sub(base_ack.len() + 4);
   if have_bits.is_empty() {
     let mut out = Vec::with_capacity(base_ack.len() + 4);
     out.extend_from_slice(base_ack);
@@ -36,7 +37,7 @@ pub(super) fn try_build_final_dir_ack(
   if all_hit && have_bits.len() <= MAX_BLOCK {
     let mut out = Vec::with_capacity(base_ack.len() + 4);
     out.extend_from_slice(base_ack);
-    let hdr = (have_bits.len() as u32) | HAVE_ALL_ONES;
+    let hdr = (have_bits.len() as u32) | HAVE_ALL_ONES_BIT;
     out.extend_from_slice(&hdr.to_le_bytes());
     return Ok(Some(out));
   }
@@ -46,7 +47,7 @@ pub(super) fn try_build_final_dir_ack(
   let mut out = Vec::with_capacity(base_ack.len() + 4 + have_bits.len().min(max_payload));
   out.extend_from_slice(base_ack);
   if have_bits.len() > MIN_ZSTD_BYTES && have_bits.len() <= MAX_BLOCK {
-    let mut codec = Codec::new(ZSTD_LEVEL)?;
+    let mut codec = Codec::new(ZSTD_DEFAULT_LEVEL)?;
     let mut dst = vec![0u8; have_bits.len() + SLACK];
     if let Some(clen) = codec.try_compress_block(have_bits, &mut dst)?
       && clen <= max_payload
@@ -72,7 +73,7 @@ fn decode_have_tail(tail: &[u8]) -> Result<Vec<u8>, UdpError> {
     return Ok(Vec::new());
   }
   let zstd = hdr & MANIFEST_ZSTD != 0;
-  let all_ones = hdr & HAVE_ALL_ONES != 0;
+  let all_ones = hdr & HAVE_ALL_ONES_BIT != 0;
   let raw_len = (hdr & !HAVE_FLAGS) as usize;
   if raw_len > MAX_BLOCK {
     return Err(UdpError::Corrupt);
@@ -82,7 +83,7 @@ fn decode_have_tail(tail: &[u8]) -> Result<Vec<u8>, UdpError> {
   }
   let body = rd.rest();
   if zstd {
-    let mut codec = Codec::new(ZSTD_LEVEL)?;
+    let mut codec = Codec::new(ZSTD_DEFAULT_LEVEL)?;
     let mut out = vec![0u8; raw_len];
     if codec.decompress_block(body, &mut out)? != raw_len {
       return Err(UdpError::Corrupt);
@@ -107,14 +108,14 @@ pub(super) fn send_manifest(
     return Err(UdpError::Arg("清单过大"));
   }
   let n = data.len().div_ceil(MANIFEST_CHUNK);
-  let dir_ack_le = DIR_ACK.to_le_bytes();
+  let dir_ack_le = DIR_ACK_MAGIC.to_le_bytes();
   let chunks_le = (n as u32).to_le_bytes();
   let mut ok = vec![false; n];
   let total = data.len() as u32;
   let bitmap_len = n.div_ceil(8);
   let full_ack_min = DIR_ACK_HDR_LEN + bitmap_len + 4;
   let mut pkt = [0u8; DIR_HDR_LEN + MANIFEST_CHUNK];
-  let mut buf = [0u8; DGRAM];
+  let mut buf = [0u8; MAX_DATAGRAM];
   let mut wait_us = 450_000u64;
   let mut rtt_us = 0u64;
   let mut last_progress = now_us();
@@ -241,7 +242,7 @@ impl ManifestRx {
     }
     let chunks = total_len.div_ceil(MANIFEST_CHUNK);
     let mut ack = vec![0u8; DIR_ACK_HDR_LEN + chunks.div_ceil(8)];
-    ack[..4].copy_from_slice(&DIR_ACK.to_le_bytes());
+    ack[..4].copy_from_slice(&DIR_ACK_MAGIC.to_le_bytes());
     ack[4..DIR_ACK_HDR_LEN].copy_from_slice(&(chunks as u32).to_le_bytes());
     Some(Self {
       data: vec![0u8; total_len],

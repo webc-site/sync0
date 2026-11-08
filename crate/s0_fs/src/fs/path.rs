@@ -2,8 +2,8 @@ use std::{
   borrow::Cow,
   ffi::{OsStr, OsString},
   fmt::Write,
-  fs,
-  io::ErrorKind,
+  fs::{self, File, OpenOptions},
+  io::{self, ErrorKind},
   path::{Path, PathBuf},
   str,
 };
@@ -142,4 +142,27 @@ pub fn remove(p: &Path) -> Result<(), FsError> {
     Err(e) if e.kind() != ErrorKind::NotFound => Err(e.into()),
     _ => Ok(()),
   }
+}
+
+/// 以 `create + truncate + write` 打开文件用于截断写入
+pub fn create_trunc(path: &Path) -> io::Result<File> {
+  OpenOptions::new()
+    .create(true)
+    .truncate(true)
+    .write(true)
+    .open(path)
+}
+
+/// 以 `create + read + write` 打开文件并确保文件长度不小于 `min_len`
+pub fn open_rw(path: &Path, truncate: bool, min_len: u64) -> io::Result<File> {
+  let f = OpenOptions::new()
+    .create(true)
+    .truncate(truncate)
+    .read(true)
+    .write(true)
+    .open(path)?;
+  if truncate || f.metadata().map_or(true, |m| m.len() < min_len) {
+    f.set_len(min_len)?;
+  }
+  Ok(f)
 }

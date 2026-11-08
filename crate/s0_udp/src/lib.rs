@@ -7,9 +7,11 @@ mod recv;
 mod sender;
 
 use std::{
-  io,
+  hint::spin_loop,
+  io::{self, ErrorKind},
   net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, UdpSocket},
   sync::OnceLock,
+  thread::sleep,
   time::{Duration, Instant},
 };
 
@@ -20,7 +22,7 @@ pub use fs::BlockSource;
 use fs::FsError;
 pub use progress::Progress;
 pub use range::{Pacer, RangeSpec, UdpStats, recv_range_udp, send_range_udp};
-pub use recv::{BLOCK, Config, MAX_SLOTS, Outcome, Receiver, RecvStats, SLOTS};
+pub use recv::{Config, MAX_SLOTS, Outcome, Receiver, RecvStats};
 use s0_cdc::{CdcError, WireError};
 pub use s0_codec as codec;
 pub use s0_fs::{compio_io, fs};
@@ -35,6 +37,40 @@ pub const BUF_BYTES: usize = 32 * 1024 * 1024;
 pub const BIND_V4: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0));
 /// 默认 IPv6 任意绑定地址 (`[::]:0`)
 pub const BIND_V6: SocketAddr = SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 0, 0, 0));
+
+/// 进程级单调递增微秒时钟（起始 `>= 1`）
+pub fn now_us() -> u64 {
+  static EPOCH: OnceLock<Instant> = OnceLock::new();
+  EPOCH.get_or_init(Instant::now).elapsed().as_micros() as u64 + 1
+}
+
+/// 混合等待：亚毫秒区间 (< 1.5ms) 自旋等待，避免 macOS/Linux 内核定时器过睡拉低吞吐
+pub fn wait_until(target: u64) {
+  loop {
+    let now = now_us();
+    if now >= target {
+      return;
+    }
+    let d = target - now;
+    if d > 1_500 {
+      sleep(Duration::from_micros(d - 1_000));
+    } else {
+      spin_loop();
+    }
+  }
+}
+
+/// 带非阻塞退避重试的 UDP 数据报发送辅助函数
+pub fn send_udp(sock: &UdpSocket, data: &[u8], peer: SocketAddr) -> Result<(), UdpError> {
+  for _ in 0..200 {
+    match sock.send_to(data, peer) {
+      Ok(_) => return Ok(()),
+      Err(e) if e.kind() == ErrorKind::WouldBlock => sleep(Duration::from_micros(100)),
+      Err(e) => return Err(e.into()),
+    }
+  }
+  Err(UdpError::StreamTimeout)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum UdpError {

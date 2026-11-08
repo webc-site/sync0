@@ -48,6 +48,18 @@ pub(crate) struct RangePullJob<'a> {
   pub(crate) sink: &'a SharedSink,
 }
 
+impl<'a> RangePullJob<'a> {
+  #[inline]
+  fn with_peer_range(self, peer: &'a SwarmPeer, blk_lo: u32, blk_hi: u32) -> Self {
+    Self {
+      peer,
+      blk_lo,
+      blk_hi,
+      ..self
+    }
+  }
+}
+
 /// 从 `root_hash` 前 3 字节与区间起始块号/客户端端口盐值派生 24-bit UDP 会话标识
 #[inline]
 pub(crate) const fn derive_session_id(root_hash: &[u8; 16], salt: u32) -> u32 {
@@ -159,10 +171,7 @@ pub fn connect_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerError> 
         return Ok(s);
       }
     }
-    if let Some(e) = last_err {
-      return Err(PeerError::Io(e));
-    }
-    return Err(PeerError::NoHealthyPeer);
+    return Err(last_err.map_or(PeerError::NoHealthyPeer, PeerError::Io));
   }
 
   let mut last_err = None;
@@ -181,20 +190,18 @@ pub(crate) fn pull_range_from_swarm_peer(
 ) -> Result<(u32, u64, TcpStream), PeerError> {
   let mut stream = match reused_stream {
     Some(s) => s,
-    None => {
-      let addrs = resolve_swarm_peer_addrs(job.peer)?;
-      connect_ctrl_addrs(&addrs)?
-    }
+    None => connect_ctrl_addrs(&resolve_swarm_peer_addrs(job.peer)?)?,
   };
 
   let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
   let cli_port = udp_sock.local_addr()?.port();
   let sid = derive_session_id(&job.root_hash, job.blk_lo ^ (u32::from(cli_port) << 8));
-  let mut flags = FLAG_RANGE;
-  if job.byte_range.is_some() {
-    flags |= FLAG_BYTE_RANGE;
-  }
-
+  let flags = FLAG_RANGE
+    | if job.byte_range.is_some() {
+      FLAG_BYTE_RANGE
+    } else {
+      0
+    };
   let req = P2pReq {
     op: Op::Pull,
     flags,
@@ -208,12 +215,8 @@ pub(crate) fn pull_range_from_swarm_peer(
     byte_range: job.byte_range,
   };
 
-  let req_bytes = req.encode()?;
-  let have = job.sink.snapshot_have_bits();
-  write_two_frames(&mut stream, &req_bytes, &have)?;
-
-  let resp_raw = read_frame(&mut stream)?;
-  let resp = P2pResp::decode(&resp_raw)?;
+  write_two_frames(&mut stream, &req.encode()?, &job.sink.snapshot_have_bits())?;
+  let resp = P2pResp::decode(&read_frame(&mut stream)?)?;
   if resp.status != Status::Ok {
     return Err(PeerError::RemoteStatus(resp.status));
   }
@@ -253,15 +256,13 @@ pub(crate) fn execute_striped_pull(
     return Err(PeerError::NoHealthyPeer);
   }
 
-  let block_weights = base_job.sink.block_weights();
-  let vod_head_first = base_job.byte_range.is_some() || req_lo > 0;
   let stripes = plan_stripes_range(
     local_region,
     &ranked,
-    &block_weights,
+    &base_job.sink.block_weights(),
     req_lo,
     req_hi,
-    vod_head_first,
+    base_job.byte_range.is_some() || req_lo > 0,
   );
   let mut unique_peers = Vec::with_capacity(stripes.len());
   for &(p_idx, ..) in &stripes {
@@ -270,7 +271,6 @@ pub(crate) fn execute_striped_pull(
     }
   }
   let peers_used = unique_peers.len();
-  let per_stripe_rate = base_job.req_rate;
   let stripe_bounds: Arc<Vec<(AtomicU32, AtomicU32)>> = Arc::new(
     stripes
       .iter()
@@ -292,39 +292,22 @@ pub(crate) fn execute_striped_pull(
       handles.push((
         p_idx,
         s.spawn(move || -> Result<(u32, u64), PeerError> {
-          let (mut blks, mut bytes, stream) = pull_range_from_swarm_peer(
-            RangePullJob {
-              peer,
-              blk_lo: lo,
-              blk_hi: hi,
-              req_rate: per_stripe_rate,
-              ..base_job
-            },
-            conn,
-          )?;
-
+          let (mut blks, mut bytes, stream) =
+            pull_range_from_swarm_peer(base_job.with_peer_range(peer, lo, hi), conn)?;
           let mut stream_opt = Some(stream);
           while !base_job.sink.is_range_complete(req_lo, req_hi) {
             let Some((steal_lo, steal_hi)) = try_steal_tail(base_job.sink, &bounds, peer) else {
               break;
             };
-            match pull_range_from_swarm_peer(
-              RangePullJob {
-                peer,
-                blk_lo: steal_lo,
-                blk_hi: steal_hi,
-                req_rate: per_stripe_rate,
-                ..base_job
-              },
+            let Ok((b, by, s_next)) = pull_range_from_swarm_peer(
+              base_job.with_peer_range(peer, steal_lo, steal_hi),
               stream_opt.take(),
-            ) {
-              Ok((b, by, s_next)) => {
-                blks += b;
-                bytes += by;
-                stream_opt = Some(s_next);
-              }
-              Err(_) => break,
-            }
+            ) else {
+              break;
+            };
+            blks += b;
+            bytes += by;
+            stream_opt = Some(s_next);
           }
           if let Some(s_final) = stream_opt {
             reused_conns.lock().insert(peer.endpoint_id, s_final);
@@ -339,12 +322,8 @@ pub(crate) fn execute_striped_pull(
           blocks_transferred += blks;
           bytes_transferred += bytes;
         }
-        Ok(Err(PeerError::Udp(UdpError::PoisonedPeer(_)))) => {
-          poisoned_indices.push(p_idx);
-        }
-        Ok(Err(PeerError::RemoteStatus(Status::Conflict))) => {
-          conflict = true;
-        }
+        Ok(Err(PeerError::Udp(UdpError::PoisonedPeer(_)))) => poisoned_indices.push(p_idx),
+        Ok(Err(PeerError::RemoteStatus(Status::Conflict))) => conflict = true,
         _ => {}
       }
     }
@@ -356,11 +335,8 @@ pub(crate) fn execute_striped_pull(
 
   if !base_job.sink.is_range_complete(req_lo, req_hi) {
     for (p_idx, peer) in ranked.iter().enumerate() {
-      if poisoned_indices.contains(&p_idx) {
+      if poisoned_indices.contains(&p_idx) || base_job.sink.is_range_complete(req_lo, req_hi) {
         continue;
-      }
-      if base_job.sink.is_range_complete(req_lo, req_hi) {
-        break;
       }
       let have = base_job.sink.snapshot_have_bits();
       let (mut min_lo, mut max_hi) = (req_hi, req_lo);
@@ -370,23 +346,13 @@ pub(crate) fn execute_striped_pull(
       });
       if min_lo < max_hi {
         let conn = reused_conns.lock().remove(&peer.endpoint_id);
-        match pull_range_from_swarm_peer(
-          RangePullJob {
-            peer,
-            blk_lo: min_lo,
-            blk_hi: max_hi,
-            ..base_job
-          },
-          conn,
-        ) {
+        match pull_range_from_swarm_peer(base_job.with_peer_range(peer, min_lo, max_hi), conn) {
           Ok((blks, bytes, stream)) => {
             blocks_transferred += blks;
             bytes_transferred += bytes;
             reused_conns.lock().insert(peer.endpoint_id, stream);
           }
-          Err(PeerError::Udp(UdpError::PoisonedPeer(_))) => {
-            poisoned_indices.push(p_idx);
-          }
+          Err(PeerError::Udp(UdpError::PoisonedPeer(_))) => poisoned_indices.push(p_idx),
           Err(_) => {}
         }
       }
@@ -457,10 +423,22 @@ pub(crate) fn is_have_all_ones_frame(buf: &[u8]) -> bool {
 }
 
 pub(crate) fn write_frame(stream: &mut TcpStream, payload: &[u8]) -> io::Result<()> {
-  let len = payload.len() as u32;
-  stream.write_all(&len.to_le_bytes())?;
+  stream.write_all(&(payload.len() as u32).to_le_bytes())?;
   stream.write_all(payload)?;
   stream.flush()
+}
+
+pub(crate) fn write_resp(stream: &mut TcpStream, resp: &P2pResp) -> Result<(), PeerError> {
+  write_frame(stream, &resp.encode()?)?;
+  Ok(())
+}
+
+pub(crate) fn send_req_recv_resp(
+  stream: &mut TcpStream,
+  req: &P2pReq,
+) -> Result<P2pResp, PeerError> {
+  write_frame(stream, &req.encode()?)?;
+  Ok(P2pResp::decode(&read_frame(stream)?)?)
 }
 
 pub(crate) fn write_two_frames(stream: &mut TcpStream, f1: &[u8], f2: &[u8]) -> io::Result<()> {

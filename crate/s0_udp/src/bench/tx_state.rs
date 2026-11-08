@@ -9,7 +9,7 @@ use s0_cc::Cc;
 use s0_cdc::SliceWr as Wr;
 
 use super::{
-  DGRAM, TUNNEL_PKT, now_us, send_udp,
+  MAX_DATAGRAM, TUNNEL_PKT, now_us, send_udp,
   source::{Src, cnt_mask},
 };
 use crate::{
@@ -40,7 +40,7 @@ pub(super) struct Tx<'a> {
   pub(super) peer: SocketAddr,
   pub(super) src: Src,
   pub(super) pkt_size: usize,
-  pub(super) pkt_buf: [u8; DGRAM],
+  pub(super) pkt_buf: [u8; MAX_DATAGRAM],
   pub(super) done_lo: u32,
   pub(super) credit: u32,
   pub(super) first_send_us: u64,

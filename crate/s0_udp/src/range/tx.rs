@@ -14,13 +14,13 @@ use super::{
 };
 use crate::{
   BlockSource, UdpError,
-  bench::{handle_probe_observed, now_us, send_udp},
+  bench::handle_probe_observed,
   codec::{Codec, Detector},
   consts::{
     DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, PKT_ACK, PKT_NACK, PKT_PUNCH,
     ZSTD_DEFAULT_LEVEL,
   },
-  is_emsgsize,
+  is_emsgsize, now_us, send_udp,
   wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch},
 };
 
@@ -77,35 +77,29 @@ impl<'a> SendCtx<'a> {
     } else {
       16_000
     };
-    if first_loc.len > coalesce_limit {
-      let tail = dup_tail && start_blk + 1 >= hi;
-      let bytes = self.prepare_and_send(start_blk, 0, first_loc.len as usize, 0, tail)?;
-      return Ok((bytes, u32::from(bytes > 0), start_blk));
-    }
-
     let (mut total_raw, mut extra, mut cur_blk) = (first_loc.len as usize, 0u8, start_blk + 1);
-    while cur_blk < hi && extra < SUPER_MAX_EXTRA {
-      if get_bit(have_bits, cur_blk) || !self.source.has_block(cur_blk) {
-        break;
+    if first_loc.len <= coalesce_limit {
+      while cur_blk < hi && extra < SUPER_MAX_EXTRA {
+        if get_bit(have_bits, cur_blk) || !self.source.has_block(cur_blk) {
+          break;
+        }
+        let Some(loc) = self
+          .source
+          .block_loc(cur_blk)
+          .filter(|l| l.len <= coalesce_limit && total_raw + (l.len as usize) <= SUPER_MAX_BYTES)
+        else {
+          break;
+        };
+        total_raw += loc.len as usize;
+        extra += 1;
+        cur_blk += 1;
       }
-      let Some(loc) = self
-        .source
-        .block_loc(cur_blk)
-        .filter(|l| l.len <= coalesce_limit && total_raw + (l.len as usize) <= SUPER_MAX_BYTES)
-      else {
-        break;
-      };
-      total_raw += loc.len as usize;
-      extra += 1;
-      cur_blk += 1;
     }
 
+    if !self.source.has_block(start_blk) {
+      return Ok((0, 0, start_blk));
+    }
     let tail = dup_tail && cur_blk >= hi;
-    if extra == 0 {
-      let bytes = self.prepare_and_send(start_blk, 0, first_loc.len as usize, 0, tail)?;
-      return Ok((bytes, u32::from(bytes > 0), start_blk));
-    }
-
     self.block_buf.resize(total_raw, 0);
     let mut offset = 0usize;
     for b in start_blk..=start_blk + u32::from(extra) {
@@ -148,27 +142,13 @@ impl<'a> SendCtx<'a> {
     } else {
       0
     };
-    let sent = self.prepare_and_send(block_idx, 0, loc.len as usize, mask, false)?;
-    Ok((sent, u32::from(sent > 0)))
-  }
-
-  fn prepare_and_send(
-    &mut self,
-    block_idx: u32,
-    extra_blocks: u8,
-    raw_len: usize,
-    have_seg_mask: u64,
-    dup_tail: bool,
-  ) -> Result<u64, UdpError> {
-    if !self.source.has_block(block_idx) {
-      return Ok(0);
-    }
+    let raw_len = loc.len as usize;
     self.block_buf.resize(raw_len, 0);
-    let loc = self.source.block_loc(block_idx).ok_or(UdpError::Corrupt)?;
     self
       .source
       .read_loc_into(block_idx, loc, &mut self.block_buf)?;
-    self.compress_and_transmit(block_idx, extra_blocks, raw_len, have_seg_mask, dup_tail)
+    let sent = self.compress_and_transmit(block_idx, 0, raw_len, mask, false)?;
+    Ok((sent, u32::from(sent > 0)))
   }
 
   fn compress_and_transmit(
@@ -310,27 +290,24 @@ impl<'a> SendCtx<'a> {
     from: SocketAddr,
     sid24: u32,
     hi_bound: u32,
-  ) -> Result<(bool, Option<u64>), UdpError> {
+  ) -> Result<Option<u64>, UdpError> {
     match pkt.first().copied() {
-      Some(PKT_PUNCH) if decode_punch(pkt) == Ok(sid24) => {
-        self.update_peer_addr(from, pkt.len());
-        Ok((false, None))
-      }
+      Some(PKT_PUNCH) if decode_punch(pkt) == Ok(sid24) => self.update_peer_addr(from, pkt.len()),
       Some(PKT_ACK) if AckPkt::decode(pkt).is_ok_and(|a| a.session_id == sid24) => {
         self.update_peer_addr(from, 0);
-        Ok((true, None))
+        return Ok(Some(u64::MAX));
       }
       Some(PKT_NACK) => {
         if let Ok(nack) = NackPkt::decode(pkt)
           && nack.session_id == sid24
         {
           self.update_peer_addr(from, 0);
-          return Ok((false, Some(self.handle_nack(&nack, hi_bound)?)));
+          return Ok(Some(self.handle_nack(&nack, hi_bound)?));
         }
-        Ok((false, None))
       }
-      _ => Ok((false, None)),
+      _ => {}
     }
+    Ok(None)
   }
 }
 
@@ -393,34 +370,32 @@ pub fn send_range_udp<'a>(
     if now_us() >= deadline_us {
       return Err(UdpError::Timeout(spec.blk_lo, hi));
     }
-    for addr in if start.elapsed() < Duration::from_millis(15) {
+    let targets = if start.elapsed() < Duration::from_millis(15) {
       &peer_addrs[..1]
     } else {
       peer_addrs
-    } {
+    };
+    for addr in targets {
       let _ = sock.send_to(&punch_pkt, addr);
     }
-    match sock.recv_from(&mut ctrl_buf) {
-      Ok((n, from)) if n > 0 => {
-        if let Some(ack) = handle_probe_observed(&ctrl_buf[..n], from) {
-          let _ = sock.send_to(&ack, from);
-          continue;
-        }
-        if is_valid_ctrl_sid(&ctrl_buf[..n], sid24) {
-          let _ = amp.on_recv(from, n);
-          amp.mark_validated();
-          ctx.update_peer_addr(from, if ctrl_buf[0] == PKT_PUNCH { n } else { 0 });
-          if ctrl_buf[0] == PKT_ACK {
-            return Ok(UdpStats {
-              elapsed_us: start.elapsed().as_micros() as u64,
-              ..Default::default()
-            });
-          }
+    if let Ok((n, from)) = sock.recv_from(&mut ctrl_buf)
+      && n > 0
+    {
+      if let Some(ack) = handle_probe_observed(&ctrl_buf[..n], from) {
+        let _ = sock.send_to(&ack, from);
+        continue;
+      }
+      if is_valid_ctrl_sid(&ctrl_buf[..n], sid24) {
+        let _ = amp.on_recv(from, n);
+        amp.mark_validated();
+        ctx.update_peer_addr(from, if ctrl_buf[0] == PKT_PUNCH { n } else { 0 });
+        if ctrl_buf[0] == PKT_ACK {
+          return Ok(UdpStats {
+            elapsed_us: start.elapsed().as_micros() as u64,
+            ..Default::default()
+          });
         }
       }
-      Ok(_) => {}
-      Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {}
-      Err(e) => return Err(UdpError::Io(e)),
     }
   }
 
@@ -440,25 +415,22 @@ pub fn send_range_udp<'a>(
     if sent > 0 {
       let stamp = now_us();
       deadline_us = stamp.saturating_add(timeout_us);
-      for b in blk..=end_blk {
-        ctx.last_sent_us[(b - spec.blk_lo) as usize] = stamp;
-      }
+      ctx.last_sent_us[(blk - spec.blk_lo) as usize..=(end_blk - spec.blk_lo) as usize].fill(stamp);
       bytes_transferred += sent;
       blocks_transferred += count;
     }
     blk = end_blk + 1;
 
     while let Ok((n, from)) = sock.recv_from(&mut ctrl_buf) {
-      let (acked, resent_opt) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, blk)?;
-      if acked {
-        sock.set_nonblocking(false)?;
-        return Ok(UdpStats {
-          bytes_transferred,
-          blocks_transferred,
-          elapsed_us: start.elapsed().as_micros() as u64,
-        });
-      }
-      if let Some(resent) = resent_opt {
+      if let Some(resent) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, blk)? {
+        if resent == u64::MAX {
+          sock.set_nonblocking(false)?;
+          return Ok(UdpStats {
+            bytes_transferred,
+            blocks_transferred,
+            elapsed_us: start.elapsed().as_micros() as u64,
+          });
+        }
         bytes_transferred += resent;
       }
     }
@@ -470,20 +442,23 @@ pub fn send_range_udp<'a>(
   while now_us() < deadline_us {
     match sock.recv_from(&mut ctrl_buf) {
       Ok((n, from)) => {
-        let (acked, resent_opt) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, hi)?;
-        if acked {
-          return Ok(UdpStats {
-            bytes_transferred,
-            blocks_transferred,
-            elapsed_us: start.elapsed().as_micros() as u64,
-          });
-        }
-        if let Some(resent) = resent_opt {
+        if let Some(resent) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, hi)? {
+          if resent == u64::MAX {
+            return Ok(UdpStats {
+              bytes_transferred,
+              blocks_transferred,
+              elapsed_us: start.elapsed().as_micros() as u64,
+            });
+          }
           deadline_us = now_us().saturating_add(timeout_us);
           bytes_transferred += resent;
         }
       }
-      Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {}
+      Err(e)
+        if matches!(
+          e.kind(),
+          io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+        ) => {}
       Err(e) => return Err(UdpError::Io(e)),
     }
   }

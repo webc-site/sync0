@@ -14,7 +14,10 @@ use gxhash::HashMap;
 use parking_lot::RwLock;
 
 use super::PeerError;
-use crate::profile::SecretKey;
+use crate::{
+  profile::SecretKey,
+  wire::{decode_raw_socket_addrs, encode_raw_socket_addrs},
+};
 
 /// 内部 32 字节二进制 `iroh` 节点身份标识（Ed25519 公钥，栈上定长 32B，零堆分配）
 pub type PeerId = [u8; 32];
@@ -275,20 +278,7 @@ pub fn encode_iroh_b64(id: &PeerId, addr: SocketAddr) -> String {
 pub fn encode_iroh_addrs_b64(id: &PeerId, addrs: &[SocketAddr]) -> String {
   let mut raw = Vec::with_capacity(32 + addrs.len() * 19);
   raw.extend_from_slice(id);
-  for &addr in addrs.iter().take(8) {
-    match addr {
-      SocketAddr::V4(v4) => {
-        raw.push(4);
-        raw.extend_from_slice(&v4.ip().octets());
-        raw.extend_from_slice(&v4.port().to_le_bytes());
-      }
-      SocketAddr::V6(v6) => {
-        raw.push(6);
-        raw.extend_from_slice(&v6.ip().octets());
-        raw.extend_from_slice(&v6.port().to_le_bytes());
-      }
-    }
-  }
+  encode_raw_socket_addrs(addrs, 8, &mut raw);
   URL_SAFE_NO_PAD.encode(&raw)
 }
 
@@ -306,32 +296,9 @@ pub fn decode_id_b64(s: &str) -> Option<PeerId> {
   if raw.len() > 32 {
     let mut id = [0u8; 32];
     id.copy_from_slice(&raw[..32]);
-    let mut rest = &raw[32..];
-    let mut addrs = Vec::new();
-    while let Some(&tag) = rest.first() {
-      match tag {
-        4 if rest.len() >= 7 => {
-          let ip = Ipv4Addr::new(rest[1], rest[2], rest[3], rest[4]);
-          let port = u16::from_le_bytes([rest[5], rest[6]]);
-          addrs.push(SocketAddr::V4(SocketAddrV4::new(ip, port)));
-          rest = &rest[7..];
-        }
-        6 if rest.len() >= 19 => {
-          let mut oct = [0u8; 16];
-          oct.copy_from_slice(&rest[1..17]);
-          let port = u16::from_le_bytes([rest[17], rest[18]]);
-          addrs.push(SocketAddr::V6(SocketAddrV6::new(
-            Ipv6Addr::from(oct),
-            port,
-            0,
-            0,
-          )));
-          rest = &rest[19..];
-        }
-        _ => break,
-      }
-    }
-    if !addrs.is_empty() {
+    if let Ok(addrs) = decode_raw_socket_addrs(&raw[32..], 16)
+      && !addrs.is_empty()
+    {
       register_iroh_endpoints(id, &addrs);
     }
     return Some(id);

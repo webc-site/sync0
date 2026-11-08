@@ -11,9 +11,8 @@ pub use tx::send_range_udp;
 
 pub(crate) use crate::consts::TUNNEL_SEG_PAYLOAD;
 use crate::{
-  bench::{now_us, wait_until},
   consts::{DEFAULT_SEG_PAYLOAD, PKT_ACK, PKT_NACK, PKT_PUNCH},
-  is_tunnel_addr, is_tunnel_path,
+  is_tunnel_addr, is_tunnel_path, now_us, wait_until,
   wire::{AckPkt, NackPkt, decode_punch},
 };
 

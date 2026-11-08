@@ -15,7 +15,7 @@ use std::{
 pub use filter::{
   IGNORE_FILE, Ignore, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in,
 };
-pub use path::{MAX_PATH, PathErr, Staging, rel_path, remove, safe_join};
+pub use path::{MAX_PATH, PathErr, Staging, create_trunc, open_rw, rel_path, remove, safe_join};
 pub use s0_cdc::is_all_have;
 use s0_cdc::{
   CdcConfig, CdcError, ChunkSig, CopySpan, Manifest, ManifestEntry, chunk_file,
@@ -48,6 +48,39 @@ pub fn par_chunk_plan(len: usize) -> (usize, usize) {
     .clamp(1, 8)
     .min(len.div_ceil(8).max(1));
   (n_threads, len.div_ceil(n_threads))
+}
+
+/// 将切片按 `par_chunk_plan` 切分并在 `thread::scope` 中并发执行
+pub fn run_par_chunks<T, F>(items: &[T], worker: F) -> io::Result<()>
+where
+  T: Sync,
+  F: Fn(&[T]) -> io::Result<()> + Sync,
+{
+  if items.is_empty() {
+    return Ok(());
+  }
+  let (workers, chunk_sz) = par_chunk_plan(items.len());
+  if workers <= 1 {
+    return worker(items);
+  }
+  let mut first_err: Option<io::Error> = None;
+  thread::scope(|s| {
+    let handles: Vec<_> = items
+      .chunks(chunk_sz)
+      .map(|slice| s.spawn(|| worker(slice)))
+      .collect();
+    for h in handles {
+      match h.join() {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) if first_err.is_none() => first_err = Some(e),
+        Err(_) if first_err.is_none() => {
+          first_err = Some(io::Error::other("parallel chunk worker panic"));
+        }
+        _ => {}
+      }
+    }
+  });
+  first_err.map_or(Ok(()), Err)
 }
 
 /// 复用单块堆内存的根目录路径拼接器，消除海量小文件热路径 `Path::join` 重复堆分配

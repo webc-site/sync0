@@ -1,6 +1,6 @@
 use itoa::Buffer;
 
-use super::BLK;
+use super::MAX_BLOCK;
 use crate::consts::Role;
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -55,6 +55,6 @@ impl Stats {
 
 /// 已完成字节数（按 `done_lo` 块粒度）
 pub(super) const fn done_bytes(done_lo: u32, total: u64) -> u64 {
-  let done = done_lo as u64 * BLK as u64;
+  let done = done_lo as u64 * MAX_BLOCK as u64;
   if done < total { done } else { total }
 }

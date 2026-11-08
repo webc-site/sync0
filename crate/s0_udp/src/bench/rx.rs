@@ -10,7 +10,8 @@ use s0_cc::{AntiAmp, MAX_TACK_US};
 use s0_cdc::{Rd, SliceWr as Wr};
 
 use super::{
-  ACK_BLOCKS, ACK_SCAN_BLOCKS, BLK, DGRAM, DIR_MAGIC, FIN_MAGIC, IDLE_US, PKT, Role,
+  ACK_BLOCKS, ACK_SCAN_BLOCKS, DEFAULT_PKT, DIR_MAGIC, FIN_MAGIC, IDLE_US, MAX_BLOCK, MAX_DATAGRAM,
+  Role, WINDOW_BLOCKS,
   manifest::{ManifestRx, parse_manifest},
   now_us,
   probe::handle_probe_observed,
@@ -84,7 +85,7 @@ struct AckCtx {
   rx_ts: RxTs,
   amp: AntiAmp<SocketAddr>,
   dec_mbps: u16,
-  buf: [u8; DGRAM],
+  buf: [u8; MAX_DATAGRAM],
 }
 
 impl AckCtx {
@@ -96,7 +97,7 @@ impl AckCtx {
       rx_ts: RxTs::default(),
       amp: AntiAmp::default(),
       dec_mbps: 2_000,
-      buf: [0u8; DGRAM],
+      buf: [0u8; MAX_DATAGRAM],
     }
   }
 
@@ -117,15 +118,6 @@ impl AckCtx {
       return Ok(None);
     }
     self.send_ack_at(sock, peer, recv, now, 1).map(Some)
-  }
-
-  fn send_ack_force(
-    &mut self,
-    sock: &UdpSocket,
-    peer: SocketAddr,
-    recv: &Receiver,
-  ) -> Result<u64, UdpError> {
-    self.send_ack_at(sock, peer, recv, now_us(), 1)
   }
 
   fn send_ack_burst(
@@ -203,6 +195,17 @@ impl AckCtx {
   }
 }
 
+fn parse_dir_chunk<'a>(pkt: &'a [u8], dir_le: &[u8; 4]) -> Option<(usize, usize, &'a [u8])> {
+  if pkt.len() < DIR_HDR_LEN || pkt[..4] != *dir_le {
+    return None;
+  }
+  let mut rd = Rd::new(&pkt[4..DIR_HDR_LEN]);
+  let total_len = rd.u32().ok()? as usize;
+  let idx = rd.u32().ok()? as usize;
+  let payload = &pkt[DIR_HDR_LEN..];
+  ManifestRx::valid_chunk(total_len, idx, payload.len()).then_some((total_len, idx, payload))
+}
+
 /// 在已绑定的 UDP 套接字上接收一轮传输
 pub fn recv_on_sock(sock: &UdpSocket, out: &Path, show: bool) -> Result<Stats, UdpError> {
   recv_on_sock_opt(sock, out, show, false)
@@ -215,7 +218,10 @@ pub fn recv_on_sock_opt(
   show: bool,
   delete: bool,
 ) -> Result<Stats, UdpError> {
-  let mut recv = Receiver::new(Config::new(512, BLK, PKT)?.with_zstd(), 0)?;
+  let mut recv = Receiver::new(
+    Config::new(WINDOW_BLOCKS as usize, MAX_BLOCK, DEFAULT_PKT)?.with_zstd(),
+    0,
+  )?;
   let first_us = now_us();
   let mut ctx = AckCtx::new(first_us);
   let mut sink: Option<Sink> = None;
@@ -225,14 +231,11 @@ pub fn recv_on_sock_opt(
   let mut logical_bytes = 0u64;
   let mut dec = Dec::default();
   let mut bar = show.then(|| Progress::new(Role::Recv, 0));
-  let mut buf = [0u8; DGRAM];
+  let mut buf = [0u8; MAX_DATAGRAM];
   let fin_le = FIN_MAGIC.to_le_bytes();
   let dir_le = DIR_MAGIC.to_le_bytes();
-  let mut packets = 0u64;
-  let mut last_data = first_us;
-  let mut last_ack_us = first_us;
-  let mut unacked = false;
-  let mut complete_at: Option<u64> = None;
+  let (mut packets, mut last_data, mut last_ack_us) = (0u64, first_us, first_us);
+  let (mut unacked, mut complete_at) = (false, None);
 
   loop {
     match sock.recv_from(&mut buf) {
@@ -247,16 +250,8 @@ pub fn recv_on_sock_opt(
           }
           continue;
         }
-        if n >= DIR_HDR_LEN && buf[..4] == dir_le {
-          let mut hdr_rd = Rd::new(&buf[4..DIR_HDR_LEN]);
-          let Ok(total_len) = hdr_rd.u32().map(|v| v as usize) else {
-            continue;
-          };
-          let Ok(idx) = hdr_rd.u32().map(|v| v as usize) else {
-            continue;
-          };
-          let payload = &buf[DIR_HDR_LEN..n];
-          if !ManifestRx::valid_chunk(total_len, idx, payload.len()) || !ctx.amp.on_recv(addr, n) {
+        if let Some((total_len, idx, payload)) = parse_dir_chunk(&buf[..n], &dir_le) {
+          if !ctx.amp.on_recv(addr, n) {
             continue;
           }
           last_data = now_us();
@@ -283,19 +278,12 @@ pub fn recv_on_sock_opt(
             match sock.recv_from(&mut buf) {
               Ok((n2, addr2)) => {
                 polls = 0;
-                if n2 >= DIR_HDR_LEN && buf[..4] == dir_le {
-                  let mut r2 = Rd::new(&buf[4..DIR_HDR_LEN]);
-                  if let (Ok(t2), Ok(i2)) = (r2.u32(), r2.u32()) {
-                    let (t2, i2) = (t2 as usize, i2 as usize);
-                    let p2 = &buf[DIR_HDR_LEN..n2];
-                    if t2 == total_len
-                      && ManifestRx::valid_chunk(t2, i2, p2.len())
-                      && ctx.amp.on_recv(addr2, n2)
-                    {
-                      last_data = now_us();
-                      m.on_chunk(i2, p2);
-                    }
-                  }
+                if let Some((t2, i2, p2)) = parse_dir_chunk(&buf[..n2], &dir_le)
+                  && t2 == total_len
+                  && ctx.amp.on_recv(addr2, n2)
+                {
+                  last_data = now_us();
+                  m.on_chunk(i2, p2);
                 }
               }
               Err(_) if polls < 40 => {
@@ -390,7 +378,7 @@ pub fn recv_on_sock_opt(
         if let Some(b) = bar.as_mut() {
           b.tick(done_bytes(recv.done_lo(), t), 0, packets);
         }
-        if u64::from(recv.done_lo()) >= t.div_ceil(BLK as u64) {
+        if u64::from(recv.done_lo()) >= t.div_ceil(MAX_BLOCK as u64) {
           if complete_at.is_none() {
             sk.finalize()?;
           }
@@ -406,7 +394,7 @@ pub fn recv_on_sock_opt(
           last_data = done_now;
         } else if unacked {
           let ack_now = if force_ack {
-            Some(ctx.send_ack_force(sock, addr, &recv)?)
+            Some(ctx.send_ack_burst(sock, addr, &recv, 1)?)
           } else {
             ctx.send_ack(sock, addr, &recv)?
           };
@@ -427,7 +415,7 @@ pub fn recv_on_sock_opt(
           } else if total.is_some_and(|t| t > 0)
             && (unacked || now.saturating_sub(last_ack_us) >= MAX_TACK_US)
           {
-            last_ack_us = ctx.send_ack_force(sock, addr, &recv)?;
+            last_ack_us = ctx.send_ack_burst(sock, addr, &recv, 1)?;
             unacked = false;
           }
         }
@@ -445,7 +433,7 @@ pub fn recv_on_sock_opt(
   }
 
   let delta_bytes = total.ok_or(UdpError::Corrupt)?;
-  if u64::from(recv.done_lo()) < delta_bytes.div_ceil(BLK as u64) {
+  if u64::from(recv.done_lo()) < delta_bytes.div_ceil(MAX_BLOCK as u64) {
     return Err(UdpError::Corrupt);
   }
   if let Some(b) = bar.as_mut() {
@@ -457,7 +445,7 @@ pub fn recv_on_sock_opt(
     us: complete_at.unwrap_or_else(now_us).saturating_sub(first_us),
     packets,
     retx: 0,
-    blocks: delta_bytes.div_ceil(BLK as u64) as u32,
+    blocks: delta_bytes.div_ceil(MAX_BLOCK as u64) as u32,
     srtt_us: 0,
     rtt_min_us: 0,
   })

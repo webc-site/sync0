@@ -2,7 +2,9 @@ use std::fs::File;
 
 use s0_cdc::{FileAt, for_each_missing_data_span};
 
-use super::{BLK, EMPTY, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_LEVEL, manifest::Entry, now_us};
+use super::{
+  EMPTY, MAX_BLOCK, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_DEFAULT_LEVEL, manifest::Entry, now_us,
+};
 use crate::{
   UdpError,
   codec::{Codec, Detector, LevelChoice, Policy, skip_name},
@@ -111,7 +113,9 @@ impl Src {
     pkt_size: usize,
   ) -> Result<Self, UdpError> {
     let check_magic = matches!(kind, SrcKind::File(_));
-    let codec = (!skip_all).then(|| Codec::new(ZSTD_LEVEL)).transpose()?;
+    let codec = (!skip_all)
+      .then(|| Codec::new(ZSTD_DEFAULT_LEVEL))
+      .transpose()?;
     let detector = Detector::with_flags(skip_all, check_magic);
     let policy = Policy::new(1, 0);
     let slots = (0..WINDOW_BLOCKS)
@@ -259,8 +263,8 @@ impl Src {
   pub(super) fn get(&mut self, blk: u32) -> Result<&mut Blk, UdpError> {
     let idx = (blk % WINDOW_BLOCKS) as usize;
     if self.slots[idx].blk != blk {
-      let off = u64::from(blk) * BLK as u64;
-      let len = self.total.saturating_sub(off).min(BLK as u64) as usize;
+      let off = u64::from(blk) * MAX_BLOCK as u64;
+      let len = self.total.saturating_sub(off).min(MAX_BLOCK as u64) as usize;
       let slot = &mut self.slots[idx];
       slot.data.resize(len, 0);
       let (all_skip_ext, entered_compressible) = Self::read_into(

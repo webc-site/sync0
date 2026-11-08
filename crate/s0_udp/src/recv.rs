@@ -4,14 +4,10 @@ use gxhash::gxhash64;
 
 use crate::{
   UdpError,
-  consts::{DEFAULT_PKT, MAX_CNT, TUNNEL_PKT},
+  consts::{DEFAULT_PKT, MAX_BLOCK, MAX_CNT, TUNNEL_PKT, WINDOW_BLOCKS},
   wire::StreamDataHeader,
 };
 
-/// 默认块大小：128 KiB
-pub const BLOCK: usize = 128 * 1024;
-/// 块池默认槽位（64 MiB）
-pub const SLOTS: usize = 512;
 /// 槽位上限
 pub const MAX_SLOTS: usize = 65_536;
 /// 单会话块池内存上限（1 GiB）
@@ -37,7 +33,7 @@ pub struct Config {
 impl Config {
   pub fn new(slots: usize, block: usize, pkt: usize) -> Result<Self, UdpError> {
     check_slots(slots, "slots")?;
-    if block == 0 || block > BLOCK {
+    if block == 0 || block > MAX_BLOCK {
       return Err(UdpError::Arg("block"));
     }
     if pkt < MIN_PKT || pkt > block {
@@ -75,8 +71,8 @@ impl Config {
 impl Default for Config {
   fn default() -> Self {
     Self {
-      slots: SLOTS,
-      block: BLOCK,
+      slots: WINDOW_BLOCKS as usize,
+      block: MAX_BLOCK,
       pkt: 1416,
       accept_zstd: false,
     }
