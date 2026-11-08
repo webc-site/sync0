@@ -43,6 +43,7 @@ pub(super) struct Tx<'a> {
   pub(super) pkt_buf: [u8; MAX_DATAGRAM],
   pub(super) done_lo: u32,
   pub(super) credit: u32,
+  pub(super) init_rtt_us: u64,
   pub(super) first_send_us: u64,
   pub(super) last_ack: u64,
   pub(super) got_ack: bool,
@@ -72,7 +73,7 @@ impl Tx<'_> {
     if srtt > 0 {
       srtt
     } else {
-      250_000u64 << self.backoff
+      self.init_rtt_us << self.backoff
     }
   }
 
@@ -166,11 +167,12 @@ impl Tx<'_> {
               .sender
               .seed_rtt(rx_now.saturating_sub(self.first_send_us).max(1));
           }
+          let net_lost = (lost_pns.len() as u32).saturating_sub(st.spurious);
           if self.cc.on_ack(
             rx_now,
             self.sender.delivered(),
             st.acked,
-            lost_pns.len() as u32,
+            net_lost,
             self.sender.rtt(),
           ) {
             self.src.set_net_state(self.cc.max_bw(), ack.dec);
@@ -182,7 +184,15 @@ impl Tx<'_> {
               slot.have |= bits;
             }
           }
+          for &pn in &lost_pns {
+            if let Some(i) = self.sender.sent(pn)
+              && self.queue_retx(i.blk, i.idx, rx_now)
+            {
+              self.lost.push_back((i.blk, i.idx));
+            }
+          }
           if !no_rack {
+            let blk_wait_us = self.est_rtt_us() + self.sender.rtt().reo_wnd_us();
             for (b, bits) in ack.blocks() {
               if b < self.done_lo || bits == 0 {
                 continue;
@@ -190,6 +200,9 @@ impl Tx<'_> {
               let Some(slot) = self.src.slot(b) else {
                 continue;
               };
+              if slot.last_tx_us == 0 || rx_now.saturating_sub(slot.last_tx_us) < blk_wait_us {
+                continue;
+              }
               let hi_idx = (127 - bits.leading_zeros()) as u8;
               let limit_idx = if b < max_b {
                 slot.cnt
@@ -204,13 +217,6 @@ impl Tx<'_> {
                   self.lost.push_back((b, idx));
                 }
               }
-            }
-          }
-          for &pn in &lost_pns {
-            if let Some(i) = self.sender.sent(pn)
-              && self.queue_retx(i.blk, i.idx, rx_now)
-            {
-              self.lost.push_back((i.blk, i.idx));
             }
           }
           self.lost_pns = lost_pns;
@@ -310,8 +316,12 @@ impl Tx<'_> {
     let mut w = Wr::new(&mut self.pkt_buf);
     hdr.write(&mut w, &b.data[start..end])?;
     let n = w.pos();
-    if retx && let Some(t) = b.last_retx.get_mut(usize::from(idx)) {
-      *t = now.max(2);
+    if retx {
+      if let Some(t) = b.last_retx.get_mut(usize::from(idx)) {
+        *t = now.max(2);
+      }
+    } else {
+      b.last_tx_us = now;
     }
     if let Err(e) = send_udp(self.sock, &self.pkt_buf[..n], self.peer) {
       if let UdpError::Io(ref io_err) = e

@@ -6,25 +6,35 @@ use std::{
 
 use s0_cdc::{BlockLoc, FileAt, Manifest};
 
-use super::{FsError, SharedSink, fd_cache::FdCache};
+use super::{
+  FsError, SharedSink,
+  cache::{SmallCache, take_or_clone_small_cache},
+  fd_cache::FdCache,
+};
 
-/// 从源目录按全局块号 `block_idx` 无锁读取对应分块内容（$O(1)$ 有界句柄缓存，防止海量文件耗尽 OS FD）
+/// 从源目录按全局块号 `block_idx` 无锁读取对应分块内容（优先命中 `SmallCache` 连续缓存池，大文件走 $O(1)$ 有界句柄缓存）
 pub struct SourceReader {
   root: PathBuf,
   is_single_file: bool,
   manifest: Manifest,
   block_map: Vec<BlockLoc>,
+  small_cache: Option<Arc<SmallCache>>,
   fds: FdCache,
 }
 
 impl SourceReader {
   pub fn open(root: &Path, manifest: Manifest) -> Result<Self, FsError> {
+    let is_single_file = root.is_file();
+    let small_cache = (!is_single_file)
+      .then(|| take_or_clone_small_cache(root, manifest.entries.len()))
+      .flatten();
     let block_map = manifest.build_block_map();
     Ok(Self {
       root: root.to_path_buf(),
-      is_single_file: root.is_file(),
+      is_single_file,
       manifest,
       block_map,
+      small_cache,
       fds: FdCache::new(),
     })
   }
@@ -77,6 +87,12 @@ impl SourceReader {
       return Err(FsError::BlockCorrupted(block_idx));
     }
     if e.chunks.len() == 1 && !self.is_single_file {
+      if let Some(ref sc) = self.small_cache
+        && let Some(base_off) = sc.offset_of(ei)
+        && sc.read_at(base_off + loc.offset, dst).is_ok()
+      {
+        return Ok(());
+      }
       let f = File::open(self.root.join(&e.path))?;
       f.read_exact_at_pos(dst, loc.offset)?;
       return Ok(());

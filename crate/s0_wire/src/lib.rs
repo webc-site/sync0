@@ -1,11 +1,10 @@
-pub mod consts;
+#![feature(const_trait_impl, const_convert)]
+
 pub mod profile;
-pub mod region;
 pub mod wire;
 
-pub use consts::*;
 pub use profile::{ProfileDraft, ProfileError, PublicKey, SecretKey, Signature, SignedProfile};
-pub use region::Region;
+pub use s0_const::{self as consts, *};
 pub use wire::{
   Ack, AckOut, AckPkt, Blocks, DataHeader, Items, Kind, NackPkt, P2pReq, P2pResp, Ranges,
   SessionHeader, ShareSummary, StreamDataHeader, SubPush, SwarmPeer, decode_punch,

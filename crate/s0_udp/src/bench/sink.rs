@@ -14,21 +14,26 @@ use super::{
   FileSpan, MAX_DATAGRAM, RootBuf, locate_span,
   manifest::{Entry, try_build_final_dir_ack},
   sink_basis::{
-    SinglePrecheck, TargetFile, build_dir_basis, check_single_chunk, flush_small_writes,
-    precheck_single_chunks,
+    SinglePrecheck, SmallBatchFlusher, SmallWriteJob, TargetFile, build_dir_basis,
+    check_single_chunk, precheck_single_chunks,
   },
 };
 use crate::{
   UdpError,
-  fs::{Staging, copy_file_spans, create_trunc, open_nonempty_file, open_rw, prune_dir, remove},
+  fs::{
+    Staging, copy_file_spans, create_trunc, dir_has_entries, open_nonempty_file, open_rw,
+    prune_dir, remove,
+  },
 };
 
 /// 本地基准块拷贝缓冲（256 KiB）
 const COPY_BUF_LEN: usize = 256 * 1024;
-/// 接收端小文件内存聚合单文件上限（64 KiB）
-const MAX_SMALL_WRITE_FILE: u64 = 64 * 1024;
-/// 接收端小文件内存聚合缓冲池上限（16 MiB）
-const MAX_SMALL_WRITE_BUF: usize = 16 << 20;
+/// 接收端小文件内存聚合单文件上限（256 KiB，覆盖 99.7% 源码小文件与跨 128 KiB 块边界小文件）
+const MAX_SMALL_WRITE_FILE: u64 = 256 * 1024;
+/// 接收端小文件流式单批聚合缓冲阈值（32 MiB）
+const SMALL_BATCH_BUF: usize = 32 << 20;
+/// 接收端小文件流式单批聚合文件数阈值
+const SMALL_BATCH_FILES: usize = 8192;
 
 struct PendingCopy {
   basis_file: Option<File>,
@@ -51,7 +56,8 @@ pub(super) struct Sink {
   prune: Option<Vec<String>>,
   open: Option<(usize, File)>,
   small_buf: Vec<u8>,
-  small_writes: Vec<(usize, u32, u32)>,
+  small_writes: Vec<SmallWriteJob>,
+  flusher: SmallBatchFlusher,
 }
 
 impl Sink {
@@ -80,6 +86,7 @@ impl Sink {
       size,
       rem,
       created,
+      partial: Vec::new(),
     });
     for d in data_spans {
       self.spans.push(FileSpan {
@@ -138,7 +145,7 @@ impl Sink {
     let out_existed = if single_file {
       out.exists()
     } else {
-      out.is_dir()
+      dir_has_entries(out)
     };
     let (sk, dt, have_bits) =
       Self::prepare_with_limit(out, &entries, (single_file, out_existed), usize::MAX)?;
@@ -209,6 +216,7 @@ impl Sink {
       open: None,
       small_buf: Vec::new(),
       small_writes: Vec::new(),
+      flusher: SmallBatchFlusher::default(),
     };
     let (mut io_buf, mut file_basis, mut dir_basis) = (Vec::new(), BasisIndex::new(), None);
     let min_sz = CdcConfig::DEFAULT.min_size as u64;
@@ -358,22 +366,54 @@ impl Sink {
         let idx = sp.idx;
         let tf = &mut self.files[idx];
         tf.rem = tf.rem.saturating_sub(len);
-        if !tf.created && file_off == 0 && len == tf.size {
-          if len <= MAX_SMALL_WRITE_FILE
-            && self.small_buf.len() + (len as usize) <= MAX_SMALL_WRITE_BUF
-          {
+        if !tf.created && tf.size <= MAX_SMALL_WRITE_FILE {
+          let queued = if file_off == 0 && len == tf.size {
             if self.small_buf.is_empty() {
-              self.small_buf.reserve(MAX_SMALL_WRITE_BUF.min(2 << 20));
+              self.small_buf.reserve(SMALL_BATCH_BUF.min(2 << 20));
+              self.small_writes.reserve(256);
             }
             let buf_off = self.small_buf.len() as u32;
             self.small_buf.extend_from_slice(slice);
-            self.small_writes.push((idx, buf_off, len as u32));
+            self
+              .small_writes
+              .push((take(&mut tf.write_path), buf_off, len as u32));
             tf.created = true;
+            true
           } else {
-            let f = create_trunc(&tf.write_path)?;
-            f.write_all_at_pos(slice, 0)?;
-            tf.created = true;
+            if tf.partial.is_empty() {
+              tf.partial.resize(tf.size as usize, 0);
+            }
+            let f_off = file_off as usize;
+            tf.partial[f_off..f_off + (len as usize)].copy_from_slice(slice);
+            if tf.rem == 0 {
+              if self.small_buf.is_empty() {
+                self.small_buf.reserve(SMALL_BATCH_BUF.min(2 << 20));
+                self.small_writes.reserve(256);
+              }
+              let buf_off = self.small_buf.len() as u32;
+              self.small_buf.extend_from_slice(&tf.partial);
+              tf.partial = Vec::new();
+              self
+                .small_writes
+                .push((take(&mut tf.write_path), buf_off, tf.size as u32));
+              tf.created = true;
+              true
+            } else {
+              false
+            }
+          };
+          if queued
+            && (self.small_buf.len() >= SMALL_BATCH_BUF
+              || self.small_writes.len() >= SMALL_BATCH_FILES)
+          {
+            let writes = take(&mut self.small_writes);
+            let buf = take(&mut self.small_buf);
+            self.flusher.submit(writes, buf)?;
           }
+        } else if !tf.created && file_off == 0 && len == tf.size {
+          let f = create_trunc(&tf.write_path)?;
+          f.write_all_at_pos(slice, 0)?;
+          tf.created = true;
         } else if let Some((cached_idx, f)) = &self.open
           && *cached_idx == idx
         {
@@ -404,11 +444,9 @@ impl Sink {
 
   pub(super) fn finalize(&mut self) -> Result<(), UdpError> {
     self.open = None;
-    if !self.small_writes.is_empty() {
-      let writes = take(&mut self.small_writes);
-      let buf = take(&mut self.small_buf);
-      flush_small_writes(&self.files, &writes, &buf)?;
-    }
+    let writes = take(&mut self.small_writes);
+    let buf = take(&mut self.small_buf);
+    self.flusher.finish(writes, buf)?;
     for (file_idx, target_path) in self.staged.drain(..) {
       fs::rename(&self.files[file_idx].write_path, &target_path)?;
     }

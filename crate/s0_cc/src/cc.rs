@@ -12,8 +12,8 @@ const MIN_ROUND_US: u64 = 20_000;
 /// 首轮提前采样：确认 ≥ 16 包且满 2 ms 即给出种子带宽，免去高时延首轮突发与盲发
 const EARLY_ACKED: u64 = 16;
 const EARLY_MIN_US: u64 = 2_000;
-/// 高丢包：本轮丢包率 > 1/20
-const HIGH_LOSS_DIV: u64 = 20;
+/// 高丢包：本轮丢包率 > 1/12
+const HIGH_LOSS_DIV: u64 = 12;
 /// 探测：本轮带宽 ≥ 估计值 9/10 且无丢包、无排队
 const PROBE_NUM: u64 = 9;
 const PROBE_DEN: u64 = 10;
@@ -32,7 +32,7 @@ const BURST_FAR_RTT_US: u64 = 80_000;
 /// 突发调度粒度 250 µs：每粒度字节数 = bw / 4000
 const BURST_TICK_DIV: u64 = US_PER_S / 250;
 const BURST_MIN: u64 = 2;
-const BURST_MAX: u64 = 16;
+const BURST_MAX: u64 = 32;
 
 /// 排队时延梯度增益曲线（定点 `GAIN_UNIT`）
 struct Ramp {
@@ -263,7 +263,7 @@ impl Cc {
     Some(mul_div(bdp, gain as u64, GAIN_UNIT as u64))
   }
 
-  /// 单次突发包数：按 250 µs 调度粒度 `clamp(bw/4000/pkt, 2, 16)`；高丢包 4；回环 32；无样本 8（RTT > 80 ms 取 12）
+  /// 单次突发包数：按 250 µs 调度粒度 `clamp(bw/4000/pkt, 2, 32)`；高丢包 4；回环 32；无样本 8（RTT > 80 ms 取 12）
   pub const fn burst(&self, pkt: u64, rtt: &RttEstimator, loopback: bool) -> usize {
     if loopback {
       return BURST_LOOP;

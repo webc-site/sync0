@@ -410,8 +410,8 @@ fn send_nack_for_range(
   for_each_missing_span(&have, range.0, range.1, |lo, hi| {
     spans.push((lo, hi));
   });
-  let mut partials = Vec::with_capacity(partials_map.len().min(48));
-  for chunk in spans.chunks(96) {
+  let mut partials = Vec::with_capacity(partials_map.len().min(64));
+  for chunk in spans.chunks(256) {
     partials.clear();
     if !partials_map.is_empty() {
       'outer: for &(lo, hi) in chunk {
@@ -420,7 +420,7 @@ fn send_nack_for_range(
             && slot.seg_mask != 0
           {
             partials.push((blk, slot.seg_mask));
-            if partials.len() >= 48 {
+            if partials.len() >= 64 {
               break 'outer;
             }
           }
@@ -443,7 +443,7 @@ fn send_ack_burst(
   blk_lo: u32,
   blk_hi: u32,
 ) {
-  let mut raw = [0u8; 13];
+  let mut raw = [0u8; 12];
   AckPkt {
     session_id,
     blk_lo,

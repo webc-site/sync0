@@ -87,7 +87,7 @@ impl Pacer {
     let eff_bytes = bytes.max(1024) as u128;
     let step_us = ((eff_bytes * 1_000_000) / u128::from(self.rate_bps)).max(1) as u64;
     self.next_send_us = self.next_send_us.saturating_add(step_us);
-    if self.next_send_us > now {
+    if self.next_send_us > now + 200 {
       wait_until(self.next_send_us);
     }
   }

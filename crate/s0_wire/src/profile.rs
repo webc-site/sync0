@@ -9,8 +9,8 @@ use thiserror::Error;
 
 use crate::{
   consts::{
-    AttrKey, MAX_BIO_CHARS, MAX_EMAIL_LEN, MAX_NAME_CHARS, MAX_URL_LEN, PROFILE_MAGIC,
-    PROFILE_SIG_DOMAIN,
+    AttrKey, MAX_BIO_CHARS, MAX_EMAIL_LEN, MAX_NAME_CHARS, MAX_URL_LEN, MIN_PROFILE_WIRE_LEN,
+    PEER_ID_LEN, PROFILE_MAGIC, PROFILE_SIG_DOMAIN, SECRET_KEY_LEN, SIG_LEN,
   },
   region::Region,
 };
@@ -21,12 +21,12 @@ pub struct SecretKey(SigningKey);
 
 impl SecretKey {
   #[inline]
-  pub fn from_bytes(bytes: &[u8; 32]) -> Self {
+  pub fn from_bytes(bytes: &[u8; SECRET_KEY_LEN]) -> Self {
     Self(SigningKey::from_bytes(bytes))
   }
 
   #[inline]
-  pub fn to_bytes(&self) -> [u8; 32] {
+  pub fn to_bytes(&self) -> [u8; SECRET_KEY_LEN] {
     self.0.to_bytes()
   }
 
@@ -47,14 +47,14 @@ pub struct PublicKey(VerifyingKey);
 
 impl PublicKey {
   #[inline]
-  pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self, ProfileError> {
+  pub fn from_bytes(bytes: &[u8; PEER_ID_LEN]) -> Result<Self, ProfileError> {
     VerifyingKey::from_bytes(bytes)
       .map(Self)
       .map_err(|_| ProfileError::BadPublicKey)
   }
 
   #[inline]
-  pub fn as_bytes(&self) -> &[u8; 32] {
+  pub fn as_bytes(&self) -> &[u8; PEER_ID_LEN] {
     self.0.as_bytes()
   }
 
@@ -73,12 +73,12 @@ pub struct Signature(Ed25519DalekSignature);
 
 impl Signature {
   #[inline]
-  pub fn from_bytes(bytes: &[u8; 64]) -> Self {
+  pub fn from_bytes(bytes: &[u8; SIG_LEN]) -> Self {
     Self(Ed25519DalekSignature::from_bytes(bytes))
   }
 
   #[inline]
-  pub fn to_bytes(&self) -> [u8; 64] {
+  pub fn to_bytes(&self) -> [u8; SIG_LEN] {
     self.0.to_bytes()
   }
 }
@@ -107,14 +107,14 @@ pub enum ProfileError {
 /// 基于 `iroh` Ed25519 公钥自签名的对等节点名片
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedProfile {
-  pub pubkey: [u8; 32],
+  pub pubkey: [u8; PEER_ID_LEN],
   pub ts_sec: u64,
   pub name: String,
   pub email: String,
   pub url: String,
   pub region: Region,
   pub bio: String,
-  pub sig: [u8; 64],
+  pub sig: [u8; SIG_LEN],
 }
 
 /// 待签名节点资料构建器
@@ -188,7 +188,7 @@ impl ProfileDraft {
       url: self.url,
       region: self.region,
       bio: self.bio,
-      sig: [0u8; 64],
+      sig: [0u8; SIG_LEN],
     };
     let msg = profile.signing_message()?;
     let sig = sk.sign(&msg);
@@ -203,7 +203,7 @@ impl SignedProfile {
     let mut w = Wr::new(out);
     w.u32(PROFILE_MAGIC);
     w.bytes(&self.pubkey);
-    w.u64(self.ts_sec);
+    w.uvar(self.ts_sec);
 
     let mut cnt = 0u8;
     if !self.name.is_empty() {
@@ -237,7 +237,6 @@ impl SignedProfile {
     }
     if self.region != Region::Unknown {
       w.u8(AttrKey::Region as u8);
-      w.u15(2)?;
       w.u16(self.region.as_u16());
     }
     if !self.bio.is_empty() {
@@ -264,20 +263,20 @@ impl SignedProfile {
 
   /// 解码并自动执行 Ed25519 公钥验签与字段约束校验
   pub fn decode_and_verify(buf: &[u8]) -> Result<Self, ProfileError> {
-    if buf.len() < 4 + 32 + 8 + 1 + 64 {
+    if buf.len() < MIN_PROFILE_WIRE_LEN {
       return Err(ProfileError::Wire(WireError::Truncated));
     }
-    let body_end = buf.len() - 64;
+    let body_end = buf.len() - SIG_LEN;
     let body = &buf[..body_end];
-    let mut sig = [0u8; 64];
+    let mut sig = [0u8; SIG_LEN];
     sig.copy_from_slice(&buf[body_end..]);
 
     let mut r = Rd::new(body);
     if r.u32()? != PROFILE_MAGIC {
       return Err(ProfileError::Wire(WireError::BadMagic));
     }
-    let pubkey = r.array::<32>()?;
-    let ts_sec = r.u64()?;
+    let pubkey = r.array::<PEER_ID_LEN>()?;
+    let ts_sec = r.uvar()?;
     let attr_cnt = r.u8()? as usize;
 
     let mut name = String::new();
@@ -318,12 +317,7 @@ impl SignedProfile {
           url = s.to_owned();
         }
         AttrKey::Region => {
-          let val_bytes = r.vec_u15()?;
-          if val_bytes.len() != 2 {
-            return Err(ProfileError::Wire(WireError::Truncated));
-          }
-          let id = u16::from_le_bytes([val_bytes[0], val_bytes[1]]);
-          region = Region::from_u16(id);
+          region = Region::from_u16(r.u16()?);
         }
         AttrKey::Bio => {
           let s = r.str_u15()?;
@@ -358,7 +352,7 @@ impl SignedProfile {
 
   /// 校验该名片是否由指定的 `EndpointId` 签名
   #[inline]
-  pub fn matches_endpoint(&self, endpoint_id: &[u8; 32]) -> bool {
+  pub fn matches_endpoint(&self, endpoint_id: &[u8; PEER_ID_LEN]) -> bool {
     &self.pubkey == endpoint_id
   }
 }

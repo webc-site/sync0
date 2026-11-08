@@ -9,5 +9,6 @@ repository.workspace = true
 coarsetime = "0.1.38"
 ed25519-dalek = "3.0.0"
 s0_cdc = { version = "0.1.0", path = "../s0_cdc" }
+s0_const = { version = "0.1.0", path = "../s0_const" }
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.21"

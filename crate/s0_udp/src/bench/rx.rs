@@ -219,7 +219,6 @@ pub fn recv_on_sock_opt(
   )?;
   let first_us = now_us();
   let mut ctx = AckCtx::new(first_us);
-  let mut sink: Option<Sink> = None;
   let mut manifest: Option<ManifestRx> = None;
   let mut dir_ack_done: Option<Vec<u8>> = None;
   let mut total: Option<u64> = None;
@@ -300,9 +299,10 @@ pub fn recv_on_sock_opt(
             if delta_total == 0 {
               sk.finalize()?;
               complete_at = Some(now_us());
+            } else {
+              dec.bind(sk, delta_total);
             }
             logical_bytes = l_total;
-            sink = Some(sk);
             total = Some(delta_total);
             if let Some(b) = bar.as_mut() {
               b.set_total(delta_total);
@@ -314,9 +314,12 @@ pub fn recv_on_sock_opt(
         let Ok((h, payload)) = DataHeader::parse(&buf[..n]) else {
           continue;
         };
-        let (Some(sk), Some(t)) = (&mut sink, total) else {
+        let Some(t) = total else {
           continue;
         };
+        if !dec.is_active() && complete_at.is_none() {
+          continue;
+        }
         if !ctx.amp.on_recv(addr, n) {
           continue;
         }
@@ -366,7 +369,7 @@ pub fn recv_on_sock_opt(
             ready[..n_ready].sort_unstable_by_key(|&(b, _)| b);
           }
           for &(b, zstd) in &ready[..n_ready] {
-            dec.write(&mut recv, sk, b, zstd, t)?;
+            dec.write(&mut recv, b, zstd)?;
           }
           ctx.dec_mbps = dec.dec_mbps();
         }
@@ -374,13 +377,11 @@ pub fn recv_on_sock_opt(
           b.tick(done_bytes(recv.done_lo(), t), 0, packets);
         }
         if u64::from(recv.done_lo()) >= t.div_ceil(MAX_BLOCK as u64) {
-          if complete_at.is_none() {
-            sk.finalize()?;
-          }
           let done_now = ctx.send_ack_burst(sock, addr, &recv, 3)?;
           unacked = false;
           last_ack_us = done_now;
           if complete_at.is_none() {
+            dec.finalize()?;
             complete_at = Some(done_now);
             if let Some(b) = bar.as_mut() {
               b.mark_done();

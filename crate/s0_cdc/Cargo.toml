@@ -9,6 +9,7 @@ readme = "../../README.md"
 
 [dependencies]
 gxhash = "3.5.0"
+s0_const = { version = "0.1.0", path = "../s0_const" }
 thiserror = "2.0.21"
 
 [dev-dependencies]

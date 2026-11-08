@@ -1,14 +1,17 @@
-use std::fs::File;
+use std::{fs::File, mem::swap, sync::Arc};
 
-use s0_cdc::{FileAt, for_each_missing_data_span};
+use s0_cdc::for_each_missing_data_span;
 
+pub(super) use super::prefetch::SrcKind;
 use super::{
-  EMPTY, FileSpan, MAX_BLOCK, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_DEFAULT_LEVEL, locate_span,
-  manifest::Entry, now_us,
+  EMPTY, FileSpan, MAX_BLOCK, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_DEFAULT_LEVEL,
+  manifest::Entry,
+  now_us,
+  prefetch::{LVL_OFF, Prefetcher, read_into},
 };
 use crate::{
   UdpError,
-  codec::{Codec, Detector, LevelChoice, Policy, skip_name},
+  codec::{Codec, Detector, LevelChoice, Policy},
 };
 
 /// 分片数对应的低 `cnt` 位全 1 掩码
@@ -27,6 +30,7 @@ pub(super) struct Blk {
   pub(super) cnt: u8,
   pub(super) zstd: bool,
   pub(super) have: u128,
+  pub(super) last_tx_us: u64,
   pub(super) last_retx: [u64; MAX_CNT],
 }
 
@@ -74,25 +78,24 @@ pub(super) fn build_tx_spans(entries: &[Entry], have_bits: &[u8]) -> (Vec<FileSp
   (spans, delta_total)
 }
 
-/// 流式块源：按需直接读入槽位 + 复用 `s0_codec::{Detector, Policy}` 带宽×CPU 自适应压缩
+/// 流式块源：后台多线程前瞻预取 + 并行 Zstd 压缩流水线 + `s0_codec::{Detector, Policy}` 带宽×CPU 自适应压缩
 pub(super) struct Src {
-  kind: SrcKind,
-  entries: Vec<Entry>,
-  spans: Vec<FileSpan>,
+  kind: Arc<SrcKind>,
+  entries: Arc<Vec<Entry>>,
+  spans: Arc<Vec<FileSpan>>,
   span_hint: usize,
+  root_buf: RootBuf,
+  epoch: u64,
   total: u64,
+  nblk: u32,
   pkt_size: usize,
   codec: Option<Codec>,
   detector: Detector,
   policy: Policy,
   line_bps: u64,
   open: Option<(usize, File)>,
+  prefetcher: Prefetcher,
   slots: Box<[Blk]>,
-}
-
-pub(super) enum SrcKind {
-  File(File),
-  Dir(RootBuf, Vec<u8>),
 }
 
 impl Src {
@@ -105,11 +108,23 @@ impl Src {
     pkt_size: usize,
   ) -> Result<Self, UdpError> {
     let check_magic = matches!(kind, SrcKind::File(_));
+    let root_buf = kind.root_buf();
+    let kind_arc = Arc::new(kind);
+    let entries_arc = Arc::new(entries);
+    let spans_arc = Arc::new(spans);
     let codec = (!skip_all)
       .then(|| Codec::new(ZSTD_DEFAULT_LEVEL))
       .transpose()?;
     let detector = Detector::with_flags(skip_all, check_magic);
-    let policy = Policy::new(1, 0);
+    let prefetcher = Prefetcher::new(
+      Arc::clone(&kind_arc),
+      Arc::clone(&entries_arc),
+      Arc::clone(&spans_arc),
+      total,
+      skip_all,
+      check_magic,
+    );
+    let policy = Policy::new(prefetcher.worker_count(), 0);
     let slots = (0..WINDOW_BLOCKS)
       .map(|_| Blk {
         blk: EMPTY,
@@ -117,21 +132,26 @@ impl Src {
         cnt: 0,
         zstd: false,
         have: 0,
+        last_tx_us: 0,
         last_retx: [0; MAX_CNT],
       })
       .collect();
     Ok(Self {
-      kind,
-      entries,
-      spans,
+      kind: kind_arc,
+      entries: entries_arc,
+      spans: spans_arc,
       span_hint: 0,
+      root_buf,
+      epoch: 1,
       total,
+      nblk: total.div_ceil(MAX_BLOCK as u64) as u32,
       pkt_size,
       codec,
       detector,
       policy,
       line_bps: 0,
       open: None,
+      prefetcher,
       slots,
     })
   }
@@ -144,6 +164,7 @@ impl Src {
         if s.blk != EMPTY {
           s.cnt = s.data.len().div_ceil(new_pkt) as u8;
           s.have = 0;
+          s.last_tx_us = 0;
           s.last_retx[..usize::from(s.cnt)].fill(0);
         }
       }
@@ -153,9 +174,13 @@ impl Src {
   /// 当接收端回传非空 `have_bits`（增量同步）时，重置虚拟流区间并失效预热槽位
   pub(super) fn rebuild_spans(&mut self, have_bits: &[u8]) -> u64 {
     let (spans, total) = build_tx_spans(&self.entries, have_bits);
-    self.spans = spans;
+    let spans_arc = Arc::new(spans);
+    self.epoch += 1;
+    self.spans = Arc::clone(&spans_arc);
     self.span_hint = 0;
     self.total = total;
+    self.nblk = total.div_ceil(MAX_BLOCK as u64) as u32;
+    self.prefetcher.reset_plan(self.epoch, spans_arc, total);
     for s in &mut self.slots {
       s.blk = EMPTY;
     }
@@ -169,92 +194,59 @@ impl Src {
         .policy
         .set_peer_bps(u64::from(peer_dec_mbps) * 1_000_000);
     }
-  }
-
-  fn read_into(
-    kind: &mut SrcKind,
-    entries: &[Entry],
-    spans: &[FileSpan],
-    span_hint: &mut usize,
-    open: &mut Option<(usize, File)>,
-    raw: &mut [u8],
-    off: u64,
-  ) -> Result<(bool, bool), UdpError> {
-    let len = raw.len();
-    let end = off + len as u64;
-    let mut done = 0usize;
-    let mut all_skip_ext = matches!(kind, SrcKind::Dir(..));
-    let mut entered_compressible = false;
-    let start = locate_span(spans, span_hint, off);
-    for (i, sp) in spans[start..].iter().enumerate() {
-      if sp.delta_off >= end || done >= len {
-        break;
-      }
-      if sp.delta_off + sp.len <= end {
-        *span_hint = start + i + 1;
-      } else {
-        *span_hint = start + i;
-      }
-      let s = off.max(sp.delta_off);
-      let t = end.min(sp.delta_off + sp.len);
-      if t > s {
-        let chunk = &mut raw[done..done + (t - s) as usize];
-        let file_off = sp.file_off + (s - sp.delta_off);
-        match kind {
-          SrcKind::File(f) => {
-            all_skip_ext = false;
-            f.read_exact_at_pos(chunk, file_off)?;
-          }
-          SrcKind::Dir(root, arena) => {
-            let idx = sp.idx;
-            let e = &entries[idx];
-            if !skip_name(&e.path) {
-              all_skip_ext = false;
-              if file_off == 0 {
-                entered_compressible = true;
-              }
-            }
-            if let Some(base) = e.cached {
-              let start_off = (base as usize) + (file_off as usize);
-              chunk.copy_from_slice(&arena[start_off..start_off + chunk.len()]);
-            } else if let Some((cached_idx, f)) = open
-              && *cached_idx == idx
-            {
-              f.read_exact_at_pos(chunk, file_off)?;
-            } else {
-              let f = File::open(root.join(&e.path))?;
-              f.read_exact_at_pos(chunk, file_off)?;
-              if file_off + (t - s) < e.size {
-                *open = Some((idx, f));
-              }
-            }
-          }
-        }
-        done += (t - s) as usize;
-      }
-    }
-    if done != len {
-      return Err(UdpError::Arg("虚拟流读取越界"));
-    }
-    Ok((all_skip_ext, entered_compressible))
+    let lvl = if let LevelChoice::Level(l) = self.policy.choose(self.line_bps) {
+      l
+    } else {
+      LVL_OFF
+    };
+    self.prefetcher.set_level(lvl);
   }
 
   /// 取块；调用方保证 `blk` 位于发送窗口内
   pub(super) fn get(&mut self, blk: u32) -> Result<&mut Blk, UdpError> {
     let idx = (blk % WINDOW_BLOCKS) as usize;
     if self.slots[idx].blk != blk {
+      self.prefetcher.request_ahead(blk, self.nblk);
+      let mut ready_buf = Vec::new();
+      swap(&mut ready_buf, &mut self.slots[idx].data);
+      if let Some(mut ready) = self.prefetcher.take_ready(self.epoch, blk, &mut ready_buf) {
+        if ready.attempted_zstd {
+          let speed_bps = (ready.raw_len as f64) * 1_000_000.0 / (ready.comp_us as f64);
+          let ratio = if ready.zstd {
+            (ready.data.len() as f64) / (ready.raw_len.max(1) as f64)
+          } else {
+            1.0
+          };
+          self.policy.observe(ready.lvl, speed_bps, ratio);
+          let next_lvl = if let LevelChoice::Level(l) = self.policy.choose(self.line_bps) {
+            l
+          } else {
+            LVL_OFF
+          };
+          self.prefetcher.set_level(next_lvl);
+        }
+        let slot = &mut self.slots[idx];
+        swap(&mut slot.data, &mut ready.data);
+        slot.zstd = ready.zstd;
+        slot.cnt = slot.data.len().div_ceil(self.pkt_size) as u8;
+        slot.have = 0;
+        slot.last_tx_us = 0;
+        slot.last_retx[..usize::from(slot.cnt)].fill(0);
+        slot.blk = blk;
+        return Ok(&mut self.slots[idx]);
+      }
+      swap(&mut ready_buf, &mut self.slots[idx].data);
+
       let off = u64::from(blk) * MAX_BLOCK as u64;
       let len = self.total.saturating_sub(off).min(MAX_BLOCK as u64) as usize;
       let slot = &mut self.slots[idx];
       slot.data.resize(len, 0);
-      let (all_skip_ext, entered_compressible) = Self::read_into(
-        &mut self.kind,
+      let (all_skip_ext, entered_compressible) = read_into(
+        &self.kind,
         &self.entries,
         &self.spans,
-        &mut self.span_hint,
-        &mut self.open,
-        &mut slot.data,
-        off,
+        (&mut self.span_hint, &mut self.root_buf, &mut self.open),
+        (&mut slot.data, off),
       )?;
       if entered_compressible && self.detector.skip() {
         self.detector.reset_file();
@@ -289,6 +281,7 @@ impl Src {
       slot.zstd = zstd;
       slot.cnt = slot.data.len().div_ceil(self.pkt_size) as u8;
       slot.have = 0;
+      slot.last_tx_us = 0;
       slot.last_retx[..usize::from(slot.cnt)].fill(0);
       slot.blk = blk;
     }

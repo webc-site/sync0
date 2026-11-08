@@ -4,15 +4,18 @@ use s0_cdc::{Rd, WireError, Wr};
 
 use crate::{
   consts::{
-    FLAG_BYTE_RANGE, FLAG_RANGE, FLAG_RW, Op, P2P_MAGIC, PROTO_VERSION, Perm, SUB_MAGIC, Status,
+    ADDR_TAG_V4, ADDR_TAG_V6, FLAG_BYTE_RANGE, FLAG_RANGE, FLAG_RW, HASH_LEN, IPV4_OCTETS,
+    IPV6_OCTETS, MAX_CTRL_PATHS, MAX_ENCODED_ADDR_LEN, MAX_SOCKET_ADDRS, MAX_WRITE_PREFIXES, Op,
+    P2P_MAGIC, PEER_ID_LEN, PROTO_OP_MASK, PROTO_VER_SHIFT, PROTO_VERSION, Perm, SHARE_ID_LEN,
+    SUB_MAGIC, Status, TOKEN_LEN,
   },
   region::Region,
 };
 
-/// P2P 分发群（Swarm）中的在线对等节点描述（内部全二进制 `endpoint_id: [u8; 32]`）
+/// P2P 分发群（Swarm）中的在线对等节点描述（内部全二进制 `endpoint_id: [u8; PEER_ID_LEN]`）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SwarmPeer {
-  pub endpoint_id: [u8; 32],
+  pub endpoint_id: [u8; PEER_ID_LEN],
   pub region: Region,
   pub weight_rate: u64,
   pub blk_lo: u32,
@@ -25,22 +28,20 @@ impl SwarmPeer {
   fn encode_into(&self, w: &mut Wr<'_>) -> Result<(), WireError> {
     w.bytes(&self.endpoint_id);
     w.u16(self.region.as_u16());
-    w.u16(0);
-    w.u64(self.weight_rate);
-    w.u32(self.blk_lo);
-    w.u32(self.blk_hi);
+    w.uvar(self.weight_rate);
+    w.uvar(u64::from(self.blk_lo));
+    w.uvar(u64::from(self.blk_hi));
     w.slice_u15(&self.peer_addrs)?;
     w.slice_u15(&self.profile_card)?;
     Ok(())
   }
 
   fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
-    let endpoint_id = r.array::<32>()?;
+    let endpoint_id = r.array::<PEER_ID_LEN>()?;
     let region = Region::from_u16(r.u16()?);
-    let _rsv = r.u16()?;
-    let weight_rate = r.u64()?;
-    let blk_lo = r.u32()?;
-    let blk_hi = r.u32()?;
+    let weight_rate = r.uvar()?;
+    let blk_lo = r.uvar_u32()?;
+    let blk_hi = r.uvar_u32()?;
     let peer_addrs = r.vec_u15()?.to_vec();
     let profile_card = r.vec_u15()?.to_vec();
     Ok(Self {
@@ -58,7 +59,7 @@ impl SwarmPeer {
 /// 单用户多文件分享组摘要条目（用于 `Op::ListShares = 7`）
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShareSummary {
-  pub share_id: [u8; 16],
+  pub share_id: [u8; SHARE_ID_LEN],
   pub name: String,
   pub perm: Perm,
   pub eff_rate: u64,
@@ -71,24 +72,17 @@ impl ShareSummary {
     w.bytes(&self.share_id);
     w.slice_u15(self.name.as_bytes())?;
     w.u8(self.perm as u8);
-    w.u64(self.eff_rate);
-    w.u15(self.write_prefixes.len())?;
-    for p in &self.write_prefixes {
-      w.slice_u15(p.as_bytes())?;
-    }
+    w.uvar(self.eff_rate);
+    w.strs_front(&self.write_prefixes)?;
     Ok(())
   }
 
   fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
-    let share_id = r.array::<16>()?;
+    let share_id = r.array::<SHARE_ID_LEN>()?;
     let name = r.str_u15()?.to_owned();
     let perm = Perm::from_repr(r.u8()?).ok_or(WireError::BadStatus)?;
-    let eff_rate = r.u64()?;
-    let cnt = r.u15()? as usize;
-    let mut write_prefixes = Vec::with_capacity(cnt.min(64));
-    for _ in 0..cnt {
-      write_prefixes.push(r.str_u15()?.to_owned());
-    }
+    let eff_rate = r.uvar()?;
+    let write_prefixes = r.strs_front(MAX_WRITE_PREFIXES)?;
     Ok(Self {
       share_id,
       name,
@@ -102,7 +96,7 @@ impl ShareSummary {
 pub fn encode_share_summaries(list: &[ShareSummary]) -> Result<Vec<u8>, WireError> {
   let mut out = Vec::with_capacity(4 + list.len() * 32);
   let mut w = Wr::new(&mut out);
-  w.u15(list.len())?;
+  w.uvar(list.len() as u64);
   for item in list {
     item.encode_into(&mut w)?;
   }
@@ -114,7 +108,7 @@ pub fn decode_share_summaries(buf: &[u8]) -> Result<Vec<ShareSummary>, WireError
     return Ok(Vec::new());
   }
   let mut r = Rd::new(buf);
-  let cnt = r.u15()? as usize;
+  let cnt = r.uvar_usize()?;
   let mut out = Vec::with_capacity(cnt.min(128));
   for _ in 0..cnt {
     out.push(ShareSummary::decode_from(&mut r)?);
@@ -131,23 +125,22 @@ pub fn decode_share_summaries(buf: &[u8]) -> Result<Vec<ShareSummary>, WireError
 pub struct P2pReq {
   pub op: Op,
   pub flags: u8,
-  pub share_id: [u8; 16],
+  pub share_id: [u8; SHARE_ID_LEN],
   pub req_rate: u64,
   pub paths: Vec<String>,
   pub peer_addrs: Vec<u8>,
   pub profile_card: Vec<u8>,
-  pub range: Option<([u8; 16], u32, u32)>,
-  pub token: Option<[u8; 16]>,
+  pub range: Option<([u8; HASH_LEN], u32, u32)>,
+  pub token: Option<[u8; TOKEN_LEN]>,
   pub byte_range: Option<(u64, u64)>,
 }
 
 impl P2pReq {
   pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-    let mut out = Vec::with_capacity(144 + self.paths.len() * 16);
+    let mut out = Vec::with_capacity(96 + self.paths.len() * 12);
     let mut w = Wr::new(&mut out);
     w.u32(P2P_MAGIC);
-    w.u8(PROTO_VERSION);
-    w.u8(self.op as u8);
+    w.u8((PROTO_VERSION << PROTO_VER_SHIFT) | (self.op as u8));
     let mut flags = self.flags;
     if self.range.is_some() {
       flags |= FLAG_RANGE;
@@ -165,26 +158,22 @@ impl P2pReq {
       flags &= !FLAG_BYTE_RANGE;
     }
     w.u8(flags);
-    w.u8(0);
     w.bytes(&self.share_id);
-    w.u64(self.req_rate);
-    w.u15(self.paths.len())?;
-    for p in &self.paths {
-      w.slice_u15(p.as_bytes())?;
-    }
+    w.uvar(self.req_rate);
+    w.strs_front(&self.paths)?;
     w.slice_u15(&self.peer_addrs)?;
     w.slice_u15(&self.profile_card)?;
     if let Some((root_hash, lo, hi)) = self.range {
       w.bytes(&root_hash);
-      w.u32(lo);
-      w.u32(hi);
+      w.uvar(u64::from(lo));
+      w.uvar(u64::from(hi));
     }
     if let Some(tok) = self.token {
       w.bytes(&tok);
     }
     if let Some((b_lo, b_hi)) = self.byte_range {
-      w.u64(b_lo);
-      w.u64(b_hi);
+      w.uvar(b_lo);
+      w.uvar(b_hi);
     }
     Ok(out)
   }
@@ -194,18 +183,17 @@ impl P2pReq {
     if r.u32()? != P2P_MAGIC {
       return Err(WireError::BadMagic);
     }
-    if r.u8()? != PROTO_VERSION {
+    let ver_op = r.u8()?;
+    if (ver_op >> PROTO_VER_SHIFT) != PROTO_VERSION {
       return Err(WireError::BadVersion);
     }
-    let op = Op::from_repr(r.u8()?).ok_or(WireError::BadOp)?;
+    let op = Op::from_repr(ver_op & PROTO_OP_MASK).ok_or(WireError::BadOp)?;
     let flags = r.u8()?;
-    let _rsv = r.u8()?;
-    let share_id = r.array::<16>()?;
-    let req_rate = r.u64()?;
-    let path_cnt = r.u15()? as usize;
-    let mut paths = Vec::with_capacity(path_cnt.min(128));
-    for _ in 0..path_cnt {
-      let p = r.str_u15()?;
+    let share_id = r.array::<SHARE_ID_LEN>()?;
+    let req_rate = r.uvar()?;
+    let raw_paths = r.strs_front(MAX_CTRL_PATHS)?;
+    let mut paths = Vec::with_capacity(raw_paths.len());
+    for p in raw_paths {
       let clean = p.trim_matches(['/', '\\']);
       if !clean.is_empty() {
         paths.push(clean.to_owned());
@@ -214,20 +202,20 @@ impl P2pReq {
     let peer_addrs = r.vec_u15()?.to_vec();
     let profile_card = r.vec_u15()?.to_vec();
     let range = if flags & FLAG_RANGE != 0 {
-      let rh = r.array::<16>()?;
-      let lo = r.u32()?;
-      let hi = r.u32()?;
+      let rh = r.array::<HASH_LEN>()?;
+      let lo = r.uvar_u32()?;
+      let hi = r.uvar_u32()?;
       Some((rh, lo, hi))
     } else {
       None
     };
     let token = if flags & FLAG_RW != 0 {
-      Some(r.array::<16>()?)
+      Some(r.array::<TOKEN_LEN>()?)
     } else {
       None
     };
     let byte_range = if flags & FLAG_BYTE_RANGE != 0 {
-      Some((r.u64()?, r.u64()?))
+      Some((r.uvar()?, r.uvar()?))
     } else {
       None
     };
@@ -252,7 +240,7 @@ pub struct P2pResp {
   pub status: Status,
   pub flags: u8,
   pub eff_rate: u64,
-  pub root_hash: [u8; 16],
+  pub root_hash: [u8; HASH_LEN],
   pub peer_addrs: Vec<u8>,
   pub profile_card: Vec<u8>,
   pub peers: Vec<SwarmPeer>,
@@ -265,7 +253,7 @@ impl P2pResp {
       status,
       flags: 0,
       eff_rate: 0,
-      root_hash: [0u8; 16],
+      root_hash: [0u8; HASH_LEN],
       peer_addrs: Vec::new(),
       profile_card: Vec::new(),
       peers: Vec::new(),
@@ -274,21 +262,20 @@ impl P2pResp {
   }
 
   pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-    let mut out = Vec::with_capacity(64 + self.manifest.len());
+    let mut out = Vec::with_capacity(48 + self.manifest.len());
     let mut w = Wr::new(&mut out);
     w.u32(P2P_MAGIC);
     w.u8(self.status as u8);
     w.u8(self.flags);
-    w.u16(0);
-    w.u64(self.eff_rate);
+    w.uvar(self.eff_rate);
     w.bytes(&self.root_hash);
     w.slice_u15(&self.peer_addrs)?;
     w.slice_u15(&self.profile_card)?;
-    w.u15(self.peers.len())?;
+    w.uvar(self.peers.len() as u64);
     for p in &self.peers {
       p.encode_into(&mut w)?;
     }
-    w.u32(self.manifest.len() as u32);
+    w.uvar(self.manifest.len() as u64);
     w.bytes(&self.manifest);
     Ok(out)
   }
@@ -300,17 +287,16 @@ impl P2pResp {
     }
     let status = Status::from_repr(r.u8()?).ok_or(WireError::BadStatus)?;
     let flags = r.u8()?;
-    let _rsv = r.u16()?;
-    let eff_rate = r.u64()?;
-    let root_hash = r.array::<16>()?;
+    let eff_rate = r.uvar()?;
+    let root_hash = r.array::<HASH_LEN>()?;
     let peer_addrs = r.vec_u15()?.to_vec();
     let profile_card = r.vec_u15()?.to_vec();
-    let peer_cnt = r.u15()? as usize;
+    let peer_cnt = r.uvar_usize()?;
     let mut peers = Vec::with_capacity(peer_cnt.min(64));
     for _ in 0..peer_cnt {
       peers.push(SwarmPeer::decode_from(&mut r)?);
     }
-    let mf_len = r.u32()? as usize;
+    let mf_len = r.uvar_usize()?;
     let manifest = r.bytes(mf_len)?.to_vec();
     Ok(Self {
       status,
@@ -329,9 +315,9 @@ impl P2pResp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubPush {
   pub flags: u8,
-  pub share_id: [u8; 16],
+  pub share_id: [u8; SHARE_ID_LEN],
   pub eff_rate: u64,
-  pub root_hash: [u8; 16],
+  pub root_hash: [u8; HASH_LEN],
   pub origin_addrs: Vec<u8>,
   pub peers: Vec<SwarmPeer>,
   pub manifest: Vec<u8>,
@@ -339,21 +325,19 @@ pub struct SubPush {
 
 impl SubPush {
   pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-    let mut out = Vec::with_capacity(64 + self.manifest.len());
+    let mut out = Vec::with_capacity(48 + self.manifest.len());
     let mut w = Wr::new(&mut out);
     w.u32(SUB_MAGIC);
     w.u8(self.flags);
-    w.u8(0);
-    w.u16(0);
     w.bytes(&self.share_id);
-    w.u64(self.eff_rate);
+    w.uvar(self.eff_rate);
     w.bytes(&self.root_hash);
     w.slice_u15(&self.origin_addrs)?;
-    w.u15(self.peers.len())?;
+    w.uvar(self.peers.len() as u64);
     for p in &self.peers {
       p.encode_into(&mut w)?;
     }
-    w.u32(self.manifest.len() as u32);
+    w.uvar(self.manifest.len() as u64);
     w.bytes(&self.manifest);
     Ok(out)
   }
@@ -364,18 +348,16 @@ impl SubPush {
       return Err(WireError::BadMagic);
     }
     let flags = r.u8()?;
-    let _ = r.u8()?;
-    let _ = r.u16()?;
-    let share_id = r.array::<16>()?;
-    let eff_rate = r.u64()?;
-    let root_hash = r.array::<16>()?;
+    let share_id = r.array::<SHARE_ID_LEN>()?;
+    let eff_rate = r.uvar()?;
+    let root_hash = r.array::<HASH_LEN>()?;
     let origin_addrs = r.vec_u15()?.to_vec();
-    let peer_cnt = r.u15()? as usize;
+    let peer_cnt = r.uvar_usize()?;
     let mut peers = Vec::with_capacity(peer_cnt.min(64));
     for _ in 0..peer_cnt {
       peers.push(SwarmPeer::decode_from(&mut r)?);
     }
-    let mf_len = r.u32()? as usize;
+    let mf_len = r.uvar_usize()?;
     let manifest = r.bytes(mf_len)?.to_vec();
     Ok(Self {
       flags,
@@ -389,17 +371,17 @@ impl SubPush {
   }
 }
 
-/// 将多个 `SocketAddr` 编码为无长度前缀的紧凑二进制标签序列（`4` + 4B IPv4 + 2B Port 或 `6` + 16B IPv6 + 2B Port）
+/// 将多个 `SocketAddr` 编码为无长度前缀的紧凑二进制标签序列（`ADDR_TAG_V4` + 4B IPv4 + 2B Port 或 `ADDR_TAG_V6` + 16B IPv6 + 2B Port）
 pub fn encode_raw_socket_addrs(addrs: &[SocketAddr], max_cnt: usize, out: &mut Vec<u8>) {
   for addr in addrs.iter().take(max_cnt) {
     match addr {
       SocketAddr::V4(v4) => {
-        out.push(4);
+        out.push(ADDR_TAG_V4);
         out.extend_from_slice(&v4.ip().octets());
         out.extend_from_slice(&v4.port().to_le_bytes());
       }
       SocketAddr::V6(v6) => {
-        out.push(6);
+        out.push(ADDR_TAG_V6);
         out.extend_from_slice(&v6.ip().octets());
         out.extend_from_slice(&v6.port().to_le_bytes());
       }
@@ -410,16 +392,16 @@ pub fn encode_raw_socket_addrs(addrs: &[SocketAddr], max_cnt: usize, out: &mut V
 /// 解码无长度前缀的紧凑二进制 `SocketAddr` 标签序列
 pub fn decode_raw_socket_addrs(buf: &[u8], max_cnt: usize) -> Result<Vec<SocketAddr>, WireError> {
   let mut r = Rd::new(buf);
-  let mut out = Vec::with_capacity(max_cnt.min(16));
+  let mut out = Vec::with_capacity(max_cnt.min(MAX_SOCKET_ADDRS));
   while !r.is_empty() && out.len() < max_cnt {
     match r.u8()? {
-      4 => {
-        let ip = Ipv4Addr::from(r.array::<4>()?);
+      ADDR_TAG_V4 => {
+        let ip = Ipv4Addr::from(r.array::<IPV4_OCTETS>()?);
         let port = r.u16()?;
         out.push(SocketAddr::V4(SocketAddrV4::new(ip, port)));
       }
-      6 => {
-        let ip = Ipv6Addr::from(r.array::<16>()?);
+      ADDR_TAG_V6 => {
+        let ip = Ipv6Addr::from(r.array::<IPV6_OCTETS>()?);
         let port = r.u16()?;
         out.push(SocketAddr::V6(SocketAddrV6::new(ip, port, 0, 0)));
       }
@@ -431,9 +413,9 @@ pub fn decode_raw_socket_addrs(buf: &[u8], max_cnt: usize) -> Result<Vec<SocketA
 
 /// 编解码多个 UDP 候选打洞地址 (`SocketAddr`)
 pub fn encode_socket_addrs(addrs: &[SocketAddr]) -> Vec<u8> {
-  let mut out = Vec::with_capacity(1 + addrs.len() * 19);
-  out.push(addrs.len().min(16) as u8);
-  encode_raw_socket_addrs(addrs, 16, &mut out);
+  let mut out = Vec::with_capacity(1 + addrs.len() * MAX_ENCODED_ADDR_LEN);
+  out.push(addrs.len().min(MAX_SOCKET_ADDRS) as u8);
+  encode_raw_socket_addrs(addrs, MAX_SOCKET_ADDRS, &mut out);
   out
 }
 

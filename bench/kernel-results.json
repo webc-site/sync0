@@ -4,17 +4,17 @@
     "bytes": 162426868,
     "files": 1,
     "mode": "sp",
-    "us": 16473090,
-    "mbps": 78.88,
-    "note": "blocks=1240 retx=16339"
+    "us": 12709607,
+    "mbps": 102.24,
+    "note": "blocks=1240 retx=11170"
   },
   {
     "dataset": "xz",
     "bytes": 162426868,
     "files": 1,
     "mode": "p2p",
-    "us": 4670923,
-    "mbps": 278.19,
+    "us": 4148212,
+    "mbps": 313.25,
     "note": "peers=2"
   },
   {
@@ -22,8 +22,8 @@
     "bytes": 162426868,
     "files": 1,
     "mode": "rsync",
-    "us": 40602612,
-    "mbps": 32.0,
+    "us": 17736974,
+    "mbps": 73.26,
     "note": "rsync"
   },
   {
@@ -31,17 +31,17 @@
     "bytes": 1718722560,
     "files": 1,
     "mode": "sp",
-    "us": 43560245,
-    "mbps": 315.65,
-    "note": "blocks=13113 retx=6623"
+    "us": 69699698,
+    "mbps": 197.27,
+    "note": "blocks=13113 retx=11293"
   },
   {
     "dataset": "tar",
     "bytes": 1718722560,
     "files": 1,
     "mode": "p2p",
-    "us": 16225643,
-    "mbps": 847.41,
+    "us": 12823249,
+    "mbps": 1072.25,
     "note": "peers=2"
   },
   {
@@ -49,8 +49,8 @@
     "bytes": 1718722560,
     "files": 1,
     "mode": "rsync",
-    "us": 112284120,
-    "mbps": 122.46,
+    "us": 67406301,
+    "mbps": 203.98,
     "note": "rsync"
   },
   {
@@ -58,17 +58,17 @@
     "bytes": 1641555619,
     "files": 95979,
     "mode": "sp",
-    "us": 93256129,
-    "mbps": 140.82,
-    "note": "blocks=12525 retx=3357"
+    "us": 63924790,
+    "mbps": 205.44,
+    "note": "blocks=12525 retx=13090"
   },
   {
     "dataset": "dir",
     "bytes": 1641555619,
     "files": 95979,
     "mode": "p2p",
-    "us": 24520016,
-    "mbps": 535.58,
+    "us": 25353616,
+    "mbps": 517.97,
     "note": "peers=2"
   },
   {
@@ -76,8 +76,8 @@
     "bytes": 1641555619,
     "files": 95979,
     "mode": "rsync",
-    "us": 73714226,
-    "mbps": 178.15,
+    "us": 68991691,
+    "mbps": 190.35,
     "note": "rsync"
   }
 ]

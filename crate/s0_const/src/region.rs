@@ -1,5 +1,14 @@
 use strum::FromRepr;
 
+/// 同城亲和度乘数（3×）
+pub const PROX_SAME_CITY: u32 = 300;
+/// 同大区亲和度乘数（2×）
+pub const PROX_SAME_ZONE: u32 = 200;
+/// 跨大区或未知地域基准乘数（1×）
+pub const PROX_BASE: u32 = 100;
+/// 地域大区百位除数（`zone = id / 100`）
+pub const REGION_ZONE_DIV: u16 = 100;
+
 /// 城市级地域数字常量（规避国家概念与主权争议，百位代表地理大区）
 #[repr(u16)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, FromRepr)]
@@ -190,23 +199,20 @@ impl Region {
   }
 
   /// 计算两个对等节点之间的地域亲和度权重乘数（用于 Dragonfly `ParentSelector` 就近节点优先）
-  /// - 同城：`300`（3 倍权重）
-  /// - 同大区：`200`（2 倍权重）
-  /// - 跨大区或未知：`100`（1 倍基准权重）
   #[inline]
   pub const fn proximity_score(self, other: Self) -> u32 {
     let a = self as u16;
     let b = other as u16;
     if a == 0 || b == 0 {
-      return 100;
+      return PROX_BASE;
     }
     if a == b {
-      return 300;
+      return PROX_SAME_CITY;
     }
-    if a / 100 == b / 100 {
-      return 200;
+    if a / REGION_ZONE_DIV == b / REGION_ZONE_DIV {
+      return PROX_SAME_ZONE;
     }
-    100
+    PROX_BASE
   }
 
   /// 从城市三字码、中文名、英文名或数字字符串解析 `Region`

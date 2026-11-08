@@ -1,19 +1,17 @@
-use std::{fs::File, path::Path, thread};
+use std::{path::Path, sync::Arc};
 
-use s0_cdc::{CdcConfig, ChunkSig, FileAt, Rd, Wr as VecWr, chunk_file_with_buf, chunk_slice};
+use s0_cdc::{CdcConfig, ChunkSig, Rd, Wr as VecWr};
 
 pub(super) use super::manifest_net::{ManifestRx, send_manifest, try_build_final_dir_ack};
-use super::{
-  MANIFEST_CHUNK, MANIFEST_ZSTD, MAX_BLOCK, MAX_DATAGRAM, RootBuf, ZSTD_DEFAULT_LEVEL,
-  par_chunk_plan,
-};
+use super::{MANIFEST_CHUNK, MANIFEST_ZSTD, MAX_BLOCK, MAX_DATAGRAM, ZSTD_DEFAULT_LEVEL};
 use crate::{
   UdpError,
   codec::{Codec, SLACK},
   consts::{
-    DIR_ACK_HDR_LEN, HAVE_ALL_ONES_BIT, MANIFEST_DELETE, MANIFEST_PARTIAL, TOMBSTONE_NCHUNKS,
+    DIR_ACK_HDR_LEN, HASH_LEN, HAVE_ALL_ONES_BIT, MANIFEST_DELETE, MANIFEST_PARTIAL,
+    MIN_ZSTD_BYTES, U15_MAX,
   },
-  fs::{ScannedFile, rel_path, scan_files},
+  fs::{ScannedFile, SmallCache, rel_path, scan_and_cache_files, scan_files},
 };
 
 /// 单包 `DIR_ACK` 可容纳的最大位图字节数
@@ -24,12 +22,6 @@ pub(super) const MAX_MANIFEST_ENCODED: usize = MAX_MANIFEST_BITMAP * 8 * MANIFES
 const MAX_MANIFEST_RAW: usize = 64 << 20;
 /// 清单最大文件条目数
 const MAX_MANIFEST_ENTRIES: usize = 1_000_000;
-/// 发送端扫描期小文件内存池上限（16 MiB）：避免 `DIR_ACK` 后二次 `open`/`pread` 海量小文件
-const MAX_SMALL_ARENA: usize = 16 << 20;
-/// 启用 Zstd 压缩的最小清单/位图字节阈值
-pub(super) const MIN_ZSTD_BYTES: usize = 256;
-/// 路径长度上限
-const MAX_PATH_LEN: usize = 0x7FFF;
 const MANIFEST_FLAGS: u32 = MANIFEST_DELETE | MANIFEST_PARTIAL;
 pub(super) const HAVE_FLAGS: u32 = MANIFEST_ZSTD | HAVE_ALL_ONES_BIT;
 const _: () = assert!(CdcConfig::DEFAULT.max_size <= (u16::MAX as usize) + 1);
@@ -49,7 +41,7 @@ pub(super) struct Entry {
   pub(super) size: u64,
   pub(super) chunks: Vec<ChunkSig>,
   pub(super) del: bool,
-  pub(super) cached: Option<u32>,
+  pub(super) cached: Option<u64>,
 }
 
 impl Entry {
@@ -64,12 +56,12 @@ impl Entry {
   }
 }
 
-/// 将扫描列表与可选删除墓碑列表转为带 FastCDC 签名的条目、小文件内存池与逻辑总字节数
+/// 将扫描列表与可选删除墓碑列表转为带 FastCDC 签名的条目、小文件连续缓存池与逻辑总字节数
 pub(super) fn entries_from_changes(
   root: &Path,
   mut scanned: Vec<ScannedFile>,
   mut removed: Vec<String>,
-) -> Result<(Vec<Entry>, Vec<u8>, u64), UdpError> {
+) -> Result<(Vec<Entry>, Arc<SmallCache>, u64), UdpError> {
   if !scanned.is_sorted_by(|a, b| a.path < b.path) {
     scanned.sort_unstable_by(|a, b| a.path.cmp(&b.path));
     scanned.dedup_by(|b, a| a.path == b.path);
@@ -78,168 +70,31 @@ pub(super) fn entries_from_changes(
     removed.sort_unstable();
     removed.dedup();
   }
-  let max_small = CdcConfig::DEFAULT.max_size as u64;
-  if scanned.len() >= 16 {
-    return entries_from_changes_par(root, scanned, removed, max_small);
-  }
-  let mut root_buf = RootBuf::new(root);
+  let (all_chunks, cache) = scan_and_cache_files(root, &scanned)?;
   let mut entries = Vec::with_capacity(scanned.len() + removed.len());
-  let mut arena = Vec::new();
   let mut rem_it = removed.into_iter().peekable();
-  let mut io_buf = Vec::new();
   let mut total = 0u64;
-  for f in scanned {
+  for (i, (f, chunks)) in scanned.into_iter().zip(all_chunks).enumerate() {
     while let Some(path) = rem_it.next_if(|p| *p < f.path) {
       entries.push(Entry::tombstone(path));
     }
     let _ = rem_it.next_if(|p| *p == f.path);
-    let (chunks, cached) = if f.size == 0 {
-      (Vec::new(), None)
-    } else if f.size <= max_small && arena.len() + (f.size as usize) <= MAX_SMALL_ARENA {
-      let n = f.size as usize;
-      let file = File::open(root_buf.join(&f.path))?;
-      if arena.is_empty() {
-        arena.reserve(MAX_SMALL_ARENA.min(scanned_small_cap(f.size)));
-      }
-      let base = arena.len();
-      arena.resize(base + n, 0);
-      if let Err(e) = file.read_exact_at_pos(&mut arena[base..base + n], 0) {
-        arena.truncate(base);
-        return Err(e.into());
-      }
-      let chunks = chunk_slice(&arena[base..base + n], CdcConfig::DEFAULT);
-      (chunks, Some(base as u32))
-    } else {
-      let file = File::open(root_buf.join(&f.path))?;
-      (
-        chunk_file_with_buf(&file, f.size, CdcConfig::DEFAULT, &mut io_buf)?,
-        None,
-      )
-    };
     total = total.saturating_add(f.size);
     entries.push(Entry {
       path: f.path,
       size: f.size,
       chunks,
       del: false,
-      cached,
+      cached: cache.offset_of(i),
     });
   }
   for path in rem_it {
     entries.push(Entry::tombstone(path));
   }
-  Ok((entries, arena, total))
+  Ok((entries, cache, total))
 }
 
-/// 多线程并行扫描 + 小文件无锁预分配内存池：按已排序路径分片并行执行 `open + pread + FastCDC/gxhash128`
-fn entries_from_changes_par(
-  root: &Path,
-  scanned: Vec<ScannedFile>,
-  removed: Vec<String>,
-  max_small: u64,
-) -> Result<(Vec<Entry>, Vec<u8>, u64), UdpError> {
-  let mut offsets = Vec::with_capacity(scanned.len());
-  let mut arena_len = 0usize;
-  let mut total = 0u64;
-  for f in &scanned {
-    total = total.saturating_add(f.size);
-    if f.size > 0 && f.size <= max_small && arena_len + (f.size as usize) <= MAX_SMALL_ARENA {
-      offsets.push(Some(arena_len as u32));
-      arena_len += f.size as usize;
-    } else {
-      offsets.push(None);
-    }
-  }
-  let mut arena = vec![0u8; arena_len];
-  let (n_threads, chunk_len) = par_chunk_plan(scanned.len());
-
-  let mut slices = Vec::with_capacity(n_threads);
-  let mut rem_arena = arena.as_mut_slice();
-  let mut prev_end = 0usize;
-  for (files, offs) in scanned.chunks(chunk_len).zip(offsets.chunks(chunk_len)) {
-    let mut slice_end = prev_end;
-    for (f, &off) in files.iter().zip(offs.iter()) {
-      if let Some(base) = off {
-        slice_end = base as usize + f.size as usize;
-      }
-    }
-    let take = slice_end - prev_end;
-    let (head, tail) = rem_arena.split_at_mut(take);
-    rem_arena = tail;
-    slices.push((files, offs, prev_end, head));
-    prev_end = slice_end;
-  }
-
-  let worker_res: Vec<Result<Vec<Vec<ChunkSig>>, UdpError>> = thread::scope(|s| {
-    let mut handles = Vec::with_capacity(slices.len());
-    for (files, offs, base_off, buf_slice) in slices {
-      handles.push(s.spawn(move || {
-        let mut root_buf = RootBuf::new(root);
-        let mut io_buf = Vec::new();
-        let mut out = Vec::with_capacity(files.len());
-        for (f, &off) in files.iter().zip(offs.iter()) {
-          if f.size == 0 {
-            out.push(Vec::new());
-          } else if let Some(abs_off) = off {
-            let rel = abs_off as usize - base_off;
-            let n = f.size as usize;
-            let dst = &mut buf_slice[rel..rel + n];
-            let file = File::open(root_buf.join(&f.path))?;
-            file.read_exact_at_pos(dst, 0)?;
-            out.push(chunk_slice(dst, CdcConfig::DEFAULT));
-          } else {
-            let file = File::open(root_buf.join(&f.path))?;
-            out.push(chunk_file_with_buf(
-              &file,
-              f.size,
-              CdcConfig::DEFAULT,
-              &mut io_buf,
-            )?);
-          }
-        }
-        Ok(out)
-      }));
-    }
-    handles
-      .into_iter()
-      .map(|h| h.join().unwrap_or(Err(UdpError::Corrupt)))
-      .collect()
-  });
-
-  let mut entries = Vec::with_capacity(scanned.len() + removed.len());
-  let mut rem_it = removed.into_iter().peekable();
-  let mut scanned_it = scanned.into_iter().zip(offsets);
-  for res in worker_res {
-    for chunks in res? {
-      let Some((f, cached)) = scanned_it.next() else {
-        break;
-      };
-      while let Some(path) = rem_it.next_if(|p| *p < f.path) {
-        entries.push(Entry::tombstone(path));
-      }
-      let _ = rem_it.next_if(|p| *p == f.path);
-      entries.push(Entry {
-        path: f.path,
-        size: f.size,
-        chunks,
-        del: false,
-        cached,
-      });
-    }
-  }
-  for path in rem_it {
-    entries.push(Entry::tombstone(path));
-  }
-  Ok((entries, arena, total))
-}
-
-#[inline]
-const fn scanned_small_cap(first_size: u64) -> usize {
-  let est = (first_size as usize).saturating_mul(256);
-  if est < 256 * 1024 { 256 * 1024 } else { est }
-}
-
-pub(super) fn scan_dir(root: &Path) -> Result<(Vec<Entry>, Vec<u8>, u64), UdpError> {
+pub(super) fn scan_dir(root: &Path) -> Result<(Vec<Entry>, Arc<SmallCache>, u64), UdpError> {
   entries_from_changes(root, scan_files(root)?, Vec::new())
 }
 
@@ -256,7 +111,7 @@ pub(super) fn encode_manifest(entries: &[Entry], mode: ManifestMode) -> Result<V
   let mut prev_path: &[u8] = &[];
   for (i, e) in entries.iter().enumerate() {
     let p = e.path.as_bytes();
-    if p.len() > MAX_PATH_LEN {
+    if p.len() > U15_MAX {
       return Err(UdpError::Arg("清单路径过长"));
     }
     if i == 0 {
@@ -277,23 +132,18 @@ pub(super) fn encode_manifest(entries: &[Entry], mode: ManifestMode) -> Result<V
     }
     prev_path = p;
     if e.del {
-      raw.extend_from_slice(&TOMBSTONE_NCHUNKS.to_le_bytes());
+      VecWr::new(&mut raw).uvar(0);
       continue;
     }
     let nchunks = u32::try_from(e.chunks.len()).map_err(|_| UdpError::Arg("文件分块过多"))?;
-    if nchunks < u32::from(TOMBSTONE_NCHUNKS) {
-      raw.extend_from_slice(&(nchunks as u16).to_le_bytes());
-    } else {
-      raw.extend_from_slice(&u16::MAX.to_le_bytes());
-      raw.extend_from_slice(&nchunks.to_le_bytes());
-    }
+    let mut w = VecWr::new(&mut raw);
+    w.uvar(u64::from(nchunks) + 1);
     for c in &e.chunks {
       if c.len == 0 || c.len > CdcConfig::DEFAULT.max_size as u32 {
         return Err(UdpError::Arg("CDC 块长度越界"));
       }
-      let len_m1 = (c.len - 1) as u16;
-      raw.extend_from_slice(&len_m1.to_le_bytes());
-      raw.extend_from_slice(&c.hash);
+      w.uvar(u64::from(c.len));
+      w.bytes(&c.hash);
     }
   }
   if raw.len() > MAX_MANIFEST_RAW {
@@ -392,7 +242,7 @@ pub(super) fn parse_manifest(b: &[u8]) -> Result<(Vec<Entry>, u64, ManifestMode)
       }
       String::new()
     } else {
-      if suf_len == 0 || pre > path_buf.len() || pre + suf_len > MAX_PATH_LEN {
+      if suf_len == 0 || pre > path_buf.len() || pre + suf_len > U15_MAX {
         return Err(UdpError::Corrupt);
       }
       let suf = r.take(suf_len)?;
@@ -408,31 +258,27 @@ pub(super) fn parse_manifest(b: &[u8]) -> Result<(Vec<Entry>, u64, ManifestMode)
         .ok_or(UdpError::Arg("清单路径"))?
         .to_owned()
     };
-    let nchunks_lo = r.u16()?;
-    if nchunks_lo == TOMBSTONE_NCHUNKS {
+    let state_or_chunks = r.uvar()?;
+    if state_or_chunks == 0 {
       if path.is_empty() {
         return Err(UdpError::Corrupt);
       }
       entries.push(Entry::tombstone(path));
       continue;
     }
-    let nchunks = if nchunks_lo < TOMBSTONE_NCHUNKS {
-      usize::from(nchunks_lo)
-    } else {
-      let n32 = r.u32()?;
-      if n32 < u32::from(TOMBSTONE_NCHUNKS) {
-        return Err(UdpError::Corrupt);
-      }
-      n32 as usize
-    };
-    if nchunks > r.rest().len() / 18 {
+    let nchunks =
+      usize::try_from(state_or_chunks - 1).map_err(|_| UdpError::Corrupt)?;
+    if nchunks > r.rest().len() / (1 + HASH_LEN) {
       return Err(UdpError::Corrupt);
     }
     let mut chunks = Vec::with_capacity(nchunks);
     let mut size = 0u64;
     for _ in 0..nchunks {
-      let len = u32::from(r.u16()?) + 1;
-      let hash: [u8; 16] = r.array()?;
+      let len = r.uvar_u32()?;
+      if len == 0 || len > CdcConfig::DEFAULT.max_size as u32 {
+        return Err(UdpError::Corrupt);
+      }
+      let hash: [u8; HASH_LEN] = r.array()?;
       chunks.push(ChunkSig {
         offset: size,
         len,

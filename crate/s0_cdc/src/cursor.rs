@@ -1,9 +1,7 @@
 use core::str::from_utf8;
 
+pub use s0_const::{U15_MAX, UVAR_MAX_SHIFT, UVAR_STEP_BITS, VARINT_CONT_BIT, VARINT_VAL_MASK};
 use thiserror::Error;
-
-/// `u15` 变长整数最大值 (`32767`)
-const U15_MAX: u16 = 0x7FFF;
 
 /// 紧凑 1 字节线协议错误类型
 #[repr(u8)]
@@ -123,11 +121,11 @@ impl<'a> Rd<'a> {
   #[inline]
   pub fn u15(&mut self) -> Result<u16, WireError> {
     let b0 = self.u8()?;
-    if b0 & 0x80 == 0 {
+    if b0 & VARINT_CONT_BIT == 0 {
       Ok(u16::from(b0))
     } else {
       let b1 = self.u8()?;
-      Ok((u16::from(b0 & 0x7F) << 8) | u16::from(b1))
+      Ok((u16::from(b0 & VARINT_VAL_MASK) << 8) | u16::from(b1))
     }
   }
 
@@ -142,6 +140,59 @@ impl<'a> Rd<'a> {
   pub fn vec_u15(&mut self) -> Result<&'a [u8], WireError> {
     let n = self.u15()? as usize;
     self.bytes(n)
+  }
+
+  /// 读取 ULEB128 变长无符号 64 位整数（`<128` 占 1B）
+  #[inline]
+  pub fn uvar(&mut self) -> Result<u64, WireError> {
+    let mut acc = 0u64;
+    let mut shift = 0u32;
+    loop {
+      let b = self.u8()?;
+      if shift == UVAR_MAX_SHIFT && b > 1 {
+        return Err(WireError::Overflow);
+      }
+      acc |= u64::from(b & VARINT_VAL_MASK) << shift;
+      if b & VARINT_CONT_BIT == 0 {
+        return Ok(acc);
+      }
+      shift += UVAR_STEP_BITS;
+      if shift > UVAR_MAX_SHIFT {
+        return Err(WireError::Overflow);
+      }
+    }
+  }
+
+  #[inline]
+  pub fn uvar_u32(&mut self) -> Result<u32, WireError> {
+    u32::try_from(self.uvar()?).map_err(|_| WireError::Overflow)
+  }
+
+  #[inline]
+  pub fn uvar_usize(&mut self) -> Result<usize, WireError> {
+    usize::try_from(self.uvar()?).map_err(|_| WireError::Overflow)
+  }
+
+  /// 读取前缀差分压缩（Front-Coding）的字符串列表
+  pub fn strs_front(&mut self, max_items: usize) -> Result<Vec<String>, WireError> {
+    let cnt = self.uvar_usize()?;
+    if cnt > max_items {
+      return Err(WireError::Overflow);
+    }
+    let mut out = Vec::with_capacity(cnt.min(128));
+    let mut prev = Vec::<u8>::new();
+    for i in 0..cnt {
+      let shared = if i == 0 { 0 } else { self.u15()? as usize };
+      let suffix = self.vec_u15()?;
+      if shared > prev.len() {
+        return Err(WireError::Truncated);
+      }
+      prev.truncate(shared);
+      prev.extend_from_slice(suffix);
+      let s = from_utf8(&prev).map_err(|_| WireError::InvalidUtf8)?;
+      out.push(s.to_owned());
+    }
+    Ok(out)
   }
 }
 
@@ -184,13 +235,13 @@ impl<'a> Wr<'a> {
   /// 写入 `u15` 变长整数
   #[inline]
   pub fn u15(&mut self, v: usize) -> Result<(), WireError> {
-    if v > U15_MAX as usize {
+    if v > U15_MAX {
       return Err(WireError::Overflow);
     }
-    if v < 0x80 {
+    if v < usize::from(VARINT_CONT_BIT) {
       self.buf.push(v as u8);
     } else {
-      self.buf.push(0x80 | ((v >> 8) as u8));
+      self.buf.push(VARINT_CONT_BIT | ((v >> 8) as u8));
       self.buf.push((v & 0xFF) as u8);
     }
     Ok(())
@@ -200,6 +251,39 @@ impl<'a> Wr<'a> {
   pub fn slice_u15(&mut self, s: &[u8]) -> Result<(), WireError> {
     self.u15(s.len())?;
     self.bytes(s);
+    Ok(())
+  }
+
+  /// 写入 ULEB128 变长无符号 64 位整数（`<128` 占 1B）
+  #[inline]
+  pub fn uvar(&mut self, mut v: u64) {
+    while v >= u64::from(VARINT_CONT_BIT) {
+      self.buf.push((v as u8) | VARINT_CONT_BIT);
+      v >>= UVAR_STEP_BITS;
+    }
+    self.buf.push(v as u8);
+  }
+
+  /// 写入前缀差分压缩（Front-Coding）的字符串切片列表
+  pub fn strs_front<S: AsRef<str>>(&mut self, list: &[S]) -> Result<(), WireError> {
+    self.uvar(list.len() as u64);
+    let mut prev: &[u8] = &[];
+    for (i, item) in list.iter().enumerate() {
+      let pb = item.as_ref().as_bytes();
+      if i == 0 {
+        self.slice_u15(pb)?;
+      } else {
+        let shared = prev
+          .iter()
+          .zip(pb.iter())
+          .take_while(|(a, b)| a == b)
+          .count()
+          .min(U15_MAX);
+        self.u15(shared)?;
+        self.slice_u15(&pb[shared..])?;
+      }
+      prev = pb;
+    }
     Ok(())
   }
 }

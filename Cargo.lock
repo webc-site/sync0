@@ -1234,6 +1234,7 @@ dependencies = [
  "ctor",
  "gxhash",
  "log_init",
+ "s0_const",
  "thiserror",
 ]
 
@@ -1258,6 +1259,13 @@ dependencies = [
  "nested-text",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "s0_const"
+version = "0.1.0"
+dependencies = [
+ "strum",
 ]
 
 [[package]]
@@ -1336,6 +1344,7 @@ dependencies = [
  "coarsetime",
  "ed25519-dalek",
  "s0_cdc",
+ "s0_const",
  "strum",
  "thiserror",
 ]

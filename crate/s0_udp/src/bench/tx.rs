@@ -3,7 +3,8 @@ use std::{
   env::var_os,
   fs::File,
   net::{SocketAddr, UdpSocket},
-  path::Path,
+  path::{Path, PathBuf},
+  sync::Arc,
   time::Instant,
 };
 
@@ -11,7 +12,7 @@ use s0_cc::Cc;
 use s0_cdc::{CdcConfig, chunk_file};
 
 use super::{
-  DEFAULT_PKT, FIN_MAGIC, MAX_BLOCK, MAX_DATAGRAM, Role, RootBuf, TUNNEL_PKT, WINDOW_BLOCKS,
+  DEFAULT_PKT, FIN_MAGIC, MAX_BLOCK, MAX_DATAGRAM, Role, TUNNEL_PKT, WINDOW_BLOCKS,
   manifest::{Entry, ManifestMode, encode_manifest, entries_from_changes, scan_dir, send_manifest},
   now_us, send_udp,
   source::{Src, SrcKind, build_tx_spans},
@@ -20,7 +21,9 @@ use super::{
   wait_until,
 };
 use crate::{
-  BIND_V4, BIND_V6, Progress, Sender, UdpError, bind_std_udp, codec::skip_name, fs::ScannedFile,
+  BIND_V4, BIND_V6, Progress, Sender, UdpError, bind_std_udp,
+  codec::skip_name,
+  fs::{ScannedFile, SmallCache},
   is_tunnel_path,
 };
 
@@ -31,7 +34,7 @@ const PREWARM_BLOCKS: u32 = 32;
 
 enum SrcInput {
   File(File, Vec<Entry>),
-  Dir(RootBuf, Vec<Entry>, Vec<u8>),
+  Dir(PathBuf, Vec<Entry>, Arc<SmallCache>),
 }
 
 struct SendPlan {
@@ -69,11 +72,11 @@ pub fn send_on_sock_opt(
   delete: bool,
 ) -> Result<Stats, UdpError> {
   if path.is_dir() {
-    let (entries, arena, logical_total) = scan_dir(path)?;
+    let (entries, cache, logical_total) = scan_dir(path)?;
     send_inner_sock(
       sock,
       SendPlan {
-        input: SrcInput::Dir(RootBuf::new(path), entries, arena),
+        input: SrcInput::Dir(path.to_path_buf(), entries, cache),
         logical_total,
         skip_all: false,
         mode: ManifestMode {
@@ -124,13 +127,13 @@ pub fn send_changes(
   rate: u64,
   show: bool,
 ) -> Result<Stats, UdpError> {
-  let (entries, arena, logical_total) = entries_from_changes(root, files, removed)?;
+  let (entries, cache, logical_total) = entries_from_changes(root, files, removed)?;
   let bind_addr = if peer.is_ipv4() { BIND_V4 } else { BIND_V6 };
   let sock = bind_std_udp(bind_addr, false)?;
   send_inner_sock(
     &sock,
     SendPlan {
-      input: SrcInput::Dir(RootBuf::new(root), entries, arena),
+      input: SrcInput::Dir(root.to_path_buf(), entries, cache),
       logical_total,
       skip_all: false,
       mode: ManifestMode {
@@ -217,7 +220,9 @@ fn send_inner_sock(
   }
 
   let mut sender = Sender::new(RING, 0)?;
-  sender.seed_rtt(manifest_rtt);
+  if !is_loop && manifest_rtt > 0 {
+    sender.seed_rtt(manifest_rtt.min(80_000));
+  }
   let start_dbg = now_us();
   let mut tx = Tx {
     sock,
@@ -228,6 +233,7 @@ fn send_inner_sock(
     pkt_buf: [0u8; MAX_DATAGRAM],
     done_lo: 0,
     credit: WINDOW_BLOCKS,
+    init_rtt_us: manifest_rtt.clamp(20_000, 100_000),
     first_send_us: start_dbg,
     last_ack: start_dbg,
     got_ack: false,

@@ -1,5 +1,6 @@
 mod manifest;
 mod manifest_net;
+mod prefetch;
 mod probe;
 mod rx;
 mod sink;

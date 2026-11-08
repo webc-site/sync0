@@ -6,7 +6,7 @@
 #   linux-7.3.3.tar     可压缩：xz 解压后的 tar（大量重复文本与零填充）
 #   linux-7.3.3/        海量小文件：tar 解压后的内核源码树（约 8 万文件）
 #
-# 对比：sync0 单点直传 (send/recv) / sync0 多源 P2P (c1 + s1 双源做种, n1 pull) / rsync -az
+# 对比：sync0 单点直传 (send/recv) / sync0 多源 P2P (c1 + s1 双源做种, n1 pull) / rsync（不可压缩 -a，可压缩 -az）
 # 仅 c1 -> n1，全部使用 /tmp，数据只在首次测试时下载并缓存。
 #
 # 传输路径：
@@ -266,9 +266,14 @@ EOS
 
 # ---------------------------------------------------------------- rsync
 run_rsync() {
-  local src="$1" dst="$2" kind="$3"
-  local src_arg dst_arg del
+  local src="$1" dst="$2" kind="$3" id="$4"
+  local src_arg dst_arg del rflags
   remote_prepare_out ssh_n1 "$dst" "$kind"
+  if [[ "$id" == "xz" ]]; then
+    rflags="-a"
+  else
+    rflags="-az"
+  fi
   if [[ "$kind" == "dir" ]]; then
     src_arg="$src/"
     dst_arg="root@[$N1]:$dst/"
@@ -280,7 +285,7 @@ run_rsync() {
   fi
   ssh_run ssh_c1 <<EOS
 t0=\$(date +%s%N)
-rsync -az $del -e "ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10" \
+rsync $rflags $del -e "ssh -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=10" \
   "$src_arg" "$dst_arg"
 t1=\$(date +%s%N)
 echo "US=\$(( (t1 - t0) / 1000 ))"
@@ -372,7 +377,7 @@ run_case() {
     case "$mode" in
       sp) out=$(run_sp "$src" "$dst" "$kind"); us=$(printf '%s\n' "$out" | sed -n 's/.*"us":\([0-9]*\).*/\1/p' | tail -n 1); note="blocks=$(printf '%s\n' "$out" | sed -n 's/.*"blocks":\([0-9]*\).*/\1/p' | tail -n 1) retx=$(printf '%s\n' "$out" | sed -n 's/.*"retx":\([0-9]*\).*/\1/p' | tail -n 1)" ;;
       p2p) out=$(run_p2p "$share_root" "$p2p_dst" "$seed_local"); us=$(printf '%s\n' "$out" | sed -n 's/^US=//p' | tail -n 1); note=$(printf '%s\n' "$out" | grep -o 'peers=[0-9]*' | tail -n 1) ;;
-      rsync) out=$(run_rsync "$src" "$dst" "$kind"); us=$(printf '%s\n' "$out" | sed -n 's/^US=//p' | tail -n 1); note="rsync" ;;
+      rsync) out=$(run_rsync "$src" "$dst" "$kind" "$id"); us=$(printf '%s\n' "$out" | sed -n 's/^US=//p' | tail -n 1); note=$(if [[ "$id" == "xz" ]]; then echo "rsync -a"; else echo "rsync -az"; fi) ;;
     esac
     t1=$(now_us)
     [[ -z "${us:-}" || "$us" == "0" ]] && us=$((t1 - t0))
@@ -411,7 +416,7 @@ with open(js, "w") as f:
 
 names = {"xz": "linux-7.3.3.tar.xz（不可压缩）", "tar": "linux-7.3.3.tar（可压缩）", "dir": "linux-7.3.3/（海量小文件）"}
 print()
-print("| 数据集 | 大小 | 文件数 | sync0 单点 | sync0 P2P | rsync -az | 单点/rsync | P2P/rsync |")
+print("| 数据集 | 大小 | 文件数 | sync0 单点 | sync0 P2P | rsync | 单点/rsync | P2P/rsync |")
 print("| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
 for ds in ("xz", "tar", "dir"):
     sub = [r for r in rows if r["dataset"] == ds]

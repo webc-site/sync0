@@ -10,13 +10,13 @@ use s0_cdc::{Rd, SliceWr as Wr};
 use super::{
   DIR_ACK_MAGIC, DIR_MAGIC, MANIFEST_CHUNK, MANIFEST_ZSTD, MAX_BLOCK, MAX_DATAGRAM,
   ZSTD_DEFAULT_LEVEL,
-  manifest::{HAVE_FLAGS, MAX_MANIFEST_ENCODED, MIN_ZSTD_BYTES},
+  manifest::{HAVE_FLAGS, MAX_MANIFEST_ENCODED},
   now_us, send_udp, wait_until,
 };
 use crate::{
   UdpError,
   codec::{Codec, SLACK},
-  consts::{DIR_ACK_HDR_LEN, DIR_HDR_LEN, HAVE_ALL_ONES_BIT},
+  consts::{DIR_ACK_HDR_LEN, DIR_HDR_LEN, HAVE_ALL_ONES_BIT, MIN_ZSTD_BYTES},
 };
 
 pub(super) fn try_build_final_dir_ack(

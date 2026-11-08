@@ -1,7 +1,12 @@
 use std::{
   fs::File,
   path::{Path, PathBuf},
-  thread,
+  sync::{
+    Arc,
+    atomic::{AtomicU16, Ordering},
+    mpsc::{Receiver as MpscReceiver, Sender, SyncSender, channel, sync_channel},
+  },
+  thread::{self, JoinHandle},
 };
 
 use s0_cdc::{BasisIndex, CdcConfig, FileAt, hash128};
@@ -19,6 +24,9 @@ use crate::{
 /// 目录内跨文件去重扫描的基准总字节上限（128 MiB）
 const MAX_DIR_BASIS_BYTES: u64 = 128 << 20;
 
+pub(super) type SmallWriteJob = (PathBuf, u32, u32);
+type SmallBatch = (Vec<SmallWriteJob>, Vec<u8>);
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum SinglePrecheck {
   Fallback,
@@ -31,6 +39,7 @@ pub(super) struct TargetFile {
   pub(super) size: u64,
   pub(super) rem: u64,
   pub(super) created: bool,
+  pub(super) partial: Vec<u8>,
 }
 
 pub(super) fn check_single_chunk(
@@ -104,29 +113,85 @@ pub(super) fn precheck_single_chunks(
   Ok(out_vec)
 }
 
-pub(super) fn flush_small_writes(
-  files: &[TargetFile],
-  writes: &[(usize, u32, u32)],
-  buf: &[u8],
-) -> Result<(), UdpError> {
+pub(super) fn flush_small_writes(writes: &[SmallWriteJob], buf: &[u8]) -> Result<(), UdpError> {
   Ok(run_par_chunks(writes, |slice| {
     if flush_memory_slices_compio(slice.len(), |i| {
-      let (idx, off, len) = slice[i];
-      (
-        files[idx].write_path.as_path(),
-        &buf[off as usize..(off + len) as usize],
-      )
+      let (ref path, off, len) = slice[i];
+      (path.as_path(), &buf[off as usize..(off + len) as usize])
     })
     .is_ok()
     {
       return Ok(());
     }
-    for &(idx, off, len) in slice {
+    for &(ref path, off, len) in slice {
       let data = &buf[off as usize..(off + len) as usize];
-      create_trunc(&files[idx].write_path)?.write_all_at_pos(data, 0)?;
+      create_trunc(path)?.write_all_at_pos(data, 0)?;
     }
     Ok(())
   })?)
+}
+
+/// 后台异步小文件批处理刷盘器：将 `Sink::write` 累积满 `8 MiB` 或 `2048` 个小文件的批次通过有界通道投递给后台线程并发 `compio` 落盘，
+/// 使 UDP 主接收循环全程只写内存缓冲，彻底消除海量小文件同步落盘阻塞。
+#[derive(Default)]
+pub(super) struct SmallBatchFlusher {
+  tx: Option<Sender<SmallBatch>>,
+  handle: Option<JoinHandle<Result<(), UdpError>>>,
+}
+
+impl SmallBatchFlusher {
+  pub(super) fn submit(
+    &mut self,
+    writes: Vec<SmallWriteJob>,
+    buf: Vec<u8>,
+  ) -> Result<(), UdpError> {
+    let tx = match &self.tx {
+      Some(tx) => tx,
+      None => {
+        let (tx, rx) = channel::<SmallBatch>();
+        self.handle = Some(thread::spawn(move || {
+          while let Ok((w, b)) = rx.recv() {
+            flush_small_writes(&w, &b)?;
+          }
+          Ok(())
+        }));
+        self.tx.insert(tx)
+      }
+    };
+    if tx.send((writes, buf)).is_err() {
+      self.tx = None;
+      if let Some(h) = self.handle.take() {
+        return h.join().unwrap_or(Err(UdpError::Corrupt));
+      }
+    }
+    Ok(())
+  }
+
+  pub(super) fn finish(
+    &mut self,
+    tail_writes: Vec<SmallWriteJob>,
+    tail_buf: Vec<u8>,
+  ) -> Result<(), UdpError> {
+    drop(self.tx.take());
+    let tail_res = if tail_writes.is_empty() {
+      Ok(())
+    } else {
+      flush_small_writes(&tail_writes, &tail_buf)
+    };
+    if let Some(h) = self.handle.take() {
+      h.join().unwrap_or(Err(UdpError::Corrupt))?;
+    }
+    tail_res
+  }
+}
+
+impl Drop for SmallBatchFlusher {
+  fn drop(&mut self) {
+    drop(self.tx.take());
+    if let Some(h) = self.handle.take() {
+      let _ = h.join();
+    }
+  }
 }
 
 pub(super) fn build_dir_basis(
@@ -170,58 +235,170 @@ pub(super) fn build_dir_basis(
   Ok((index, paths))
 }
 
-/// 块写出器：解压器按需创建，解压缓冲全程复用，并实测 EWMA 解压速率供 `ACK.dec` 上报
+struct DecJob {
+  blk: u32,
+  zstd: bool,
+  data: Vec<u8>,
+}
+
+fn dec_and_write_one(
+  codec: &mut Option<Codec>,
+  out: &mut Vec<u8>,
+  sink: &mut Sink,
+  blk: u32,
+  zstd: bool,
+  data: &[u8],
+  total: u64,
+) -> Result<Option<u16>, UdpError> {
+  let off = u64::from(blk) * MAX_BLOCK as u64;
+  if zstd {
+    let raw_len = total.saturating_sub(off).min(MAX_BLOCK as u64) as usize;
+    let c = match codec {
+      Some(c) => c,
+      None => codec.insert(Codec::new(ZSTD_DEFAULT_LEVEL)?),
+    };
+    out.resize(raw_len, 0);
+    let t0 = now_us();
+    if c.decompress_block(data, out)? != raw_len {
+      return Err(UdpError::Corrupt);
+    }
+    let dt_us = now_us().saturating_sub(t0).max(1);
+    let sample_mbps = ((raw_len as u64) / dt_us).clamp(1, u16::MAX as u64) as u16;
+    sink.write(out, off)?;
+    Ok(Some(sample_mbps))
+  } else {
+    sink.write(data, off)?;
+    Ok(None)
+  }
+}
+
+/// 异步块解压与写出器：大于 512 KiB 的传输由独立后台工作线程并行执行 Zstd 解压与 `Sink::write`，
+/// UDP 接收主线程仅将收齐的块字节移入复用池缓冲并立即 `recv.release(blk)` 释放窗口，实现 0 解压与 0 磁盘阻塞。
 pub(super) struct Dec {
+  inline_sink: Option<(Sink, u64)>,
   codec: Option<Codec>,
   out: Vec<u8>,
-  dec_mbps: u16,
+  tx: Option<SyncSender<DecJob>>,
+  recycle_rx: Option<MpscReceiver<Vec<u8>>>,
+  handle: Option<JoinHandle<Result<(), UdpError>>>,
+  dec_mbps: Arc<AtomicU16>,
 }
 
 impl Default for Dec {
   fn default() -> Self {
     Self {
+      inline_sink: None,
       codec: None,
       out: Vec::new(),
-      dec_mbps: 2_000,
+      tx: None,
+      recycle_rx: None,
+      handle: None,
+      dec_mbps: Arc::new(AtomicU16::new(2_000)),
     }
   }
 }
 
 impl Dec {
-  pub(super) const fn dec_mbps(&self) -> u16 {
-    self.dec_mbps
+  #[inline]
+  pub(super) fn is_active(&self) -> bool {
+    self.inline_sink.is_some() || self.tx.is_some()
+  }
+
+  #[inline]
+  pub(super) fn dec_mbps(&self) -> u16 {
+    self.dec_mbps.load(Ordering::Relaxed)
+  }
+
+  pub(super) fn bind(&mut self, mut sink: Sink, total: u64) {
+    if total <= 4 * (MAX_BLOCK as u64) {
+      self.inline_sink = Some((sink, total));
+      return;
+    }
+    let (tx, rx) = sync_channel::<DecJob>(128);
+    let (recycle_tx, recycle_rx) = sync_channel::<Vec<u8>>(128);
+    let dec_mbps = Arc::clone(&self.dec_mbps);
+    self.handle = Some(thread::spawn(move || {
+      let mut codec = None;
+      let mut out = Vec::new();
+      let mut ewma = 2_000u32;
+      while let Ok(job) = rx.recv() {
+        if let Some(s) = dec_and_write_one(
+          &mut codec, &mut out, &mut sink, job.blk, job.zstd, &job.data, total,
+        )? {
+          ewma = (ewma * 3 + u32::from(s)) / 4;
+          dec_mbps.store(ewma as u16, Ordering::Relaxed);
+        }
+        let _ = recycle_tx.try_send(job.data);
+      }
+      sink.finalize()
+    }));
+    self.tx = Some(tx);
+    self.recycle_rx = Some(recycle_rx);
   }
 
   pub(super) fn write(
     &mut self,
     recv: &mut Receiver,
-    sink: &mut Sink,
     blk: u32,
     zstd: bool,
-    total: u64,
   ) -> Result<(), UdpError> {
     let Some(data) = recv.data(blk) else {
       return Ok(());
     };
-    let off = u64::from(blk) * MAX_BLOCK as u64;
-    if zstd {
-      let raw_len = total.saturating_sub(off).min(MAX_BLOCK as u64) as usize;
-      let c = match &mut self.codec {
-        Some(c) => c,
-        None => self.codec.insert(Codec::new(ZSTD_DEFAULT_LEVEL)?),
-      };
-      self.out.resize(raw_len, 0);
-      let t0 = now_us();
-      if c.decompress_block(data, &mut self.out)? != raw_len {
-        return Err(UdpError::Corrupt);
+    if let Some((ref mut sink, total)) = self.inline_sink {
+      if let Some(s) =
+        dec_and_write_one(&mut self.codec, &mut self.out, sink, blk, zstd, data, total)?
+      {
+        let cur = u32::from(self.dec_mbps.load(Ordering::Relaxed));
+        self
+          .dec_mbps
+          .store(((cur * 3 + u32::from(s)) / 4) as u16, Ordering::Relaxed);
       }
-      let dt_us = now_us().saturating_sub(t0).max(1);
-      let sample_mbps = ((raw_len as u64) / dt_us).clamp(1, u16::MAX as u64) as u16;
-      self.dec_mbps = ((u32::from(self.dec_mbps) * 3 + u32::from(sample_mbps)) / 4) as u16;
-      sink.write(&self.out, off)?;
-    } else {
-      sink.write(data, off)?;
+      return recv.release(blk);
     }
-    recv.release(blk)
+    let mut buf = self
+      .recycle_rx
+      .as_ref()
+      .and_then(|r| r.try_recv().ok())
+      .unwrap_or_else(|| Vec::with_capacity(data.len().max(32 * 1024)));
+    buf.clear();
+    buf.extend_from_slice(data);
+    recv.release(blk)?;
+    if let Some(ref tx) = self.tx
+      && tx
+        .send(DecJob {
+          blk,
+          zstd,
+          data: buf,
+        })
+        .is_err()
+    {
+      self.tx = None;
+      if let Some(h) = self.handle.take() {
+        return h.join().unwrap_or(Err(UdpError::Corrupt));
+      }
+    }
+    Ok(())
+  }
+
+  pub(super) fn finalize(&mut self) -> Result<(), UdpError> {
+    if let Some((mut sink, _)) = self.inline_sink.take() {
+      return sink.finalize();
+    }
+    drop(self.tx.take());
+    self.recycle_rx = None;
+    if let Some(h) = self.handle.take() {
+      h.join().unwrap_or(Err(UdpError::Corrupt))?;
+    }
+    Ok(())
+  }
+}
+
+impl Drop for Dec {
+  fn drop(&mut self) {
+    drop(self.tx.take());
+    if let Some(h) = self.handle.take() {
+      let _ = h.join();
+    }
   }
 }

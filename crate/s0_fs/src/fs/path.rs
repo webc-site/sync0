@@ -174,3 +174,9 @@ pub fn open_nonempty_file(path: &Path) -> Option<(File, u64)> {
   let m = f.metadata().ok()?;
   (m.is_file() && m.len() > 0).then_some((f, m.len()))
 }
+
+/// 判断目录是否存在且至少包含一个条目（空目录视同全新目标，避免全量同步时触发数十万次无效 `open`）
+#[inline]
+pub fn dir_has_entries(dir: &Path) -> bool {
+  fs::read_dir(dir).is_ok_and(|mut it| it.next().is_some())
+}

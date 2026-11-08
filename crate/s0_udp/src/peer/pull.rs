@@ -1,5 +1,5 @@
 use std::{
-  io::{self, Read, Write},
+  io,
   net::{SocketAddr, TcpStream},
   sync::{
     Arc,
@@ -14,15 +14,16 @@ use gxhash::HashMap;
 use parking_lot::Mutex;
 use s0_cdc::for_each_missing_span;
 
+pub(crate) use super::frame::{
+  is_have_all_ones_frame, read_frame, send_req_recv_resp, write_frame, write_resp, write_two_frames,
+};
 use super::{
   PeerError, PeerId, plan_stripes_range, rank_swarm_peers, register_iroh_endpoints,
   resolve_iroh_endpoints,
 };
 use crate::{
   RangeSpec, UdpError, bind_udp_for_ip,
-  consts::{
-    FLAG_BYTE_RANGE, FLAG_RANGE, HAVE_ALL_ONES, MAX_CTRL_FRAME_LEN, Op, Status, V6_PREFER_MARGIN_US,
-  },
+  consts::{FLAG_BYTE_RANGE, FLAG_RANGE, Op, Status, V6_PREFER_MARGIN_US},
   fs::SharedSink,
   punch_udp, recv_range_udp,
   region::Region,
@@ -101,8 +102,8 @@ fn connect_once(addr: &SocketAddr) -> io::Result<TcpStream> {
   };
   let s = TcpStream::connect_timeout(addr, step)?;
   let _ = s.set_nodelay(true);
-  let _ = s.set_read_timeout(Some(Duration::from_secs(10)));
-  let _ = s.set_write_timeout(Some(Duration::from_secs(10)));
+  let _ = s.set_read_timeout(Some(Duration::from_secs(30)));
+  let _ = s.set_write_timeout(Some(Duration::from_secs(30)));
   Ok(s)
 }
 
@@ -413,55 +414,4 @@ fn try_steal_tail(
   } else {
     None
   }
-}
-
-#[inline]
-pub(crate) fn is_have_all_ones_frame(buf: &[u8]) -> bool {
-  buf
-    .first_chunk::<4>()
-    .is_some_and(|&b| buf.len() == 4 && u32::from_le_bytes(b) == HAVE_ALL_ONES)
-}
-
-pub(crate) fn write_frame(stream: &mut TcpStream, payload: &[u8]) -> io::Result<()> {
-  stream.write_all(&(payload.len() as u32).to_le_bytes())?;
-  stream.write_all(payload)?;
-  stream.flush()
-}
-
-pub(crate) fn write_resp(stream: &mut TcpStream, resp: &P2pResp) -> Result<(), PeerError> {
-  write_frame(stream, &resp.encode()?)?;
-  Ok(())
-}
-
-pub(crate) fn send_req_recv_resp(
-  stream: &mut TcpStream,
-  req: &P2pReq,
-) -> Result<P2pResp, PeerError> {
-  write_frame(stream, &req.encode()?)?;
-  Ok(P2pResp::decode(&read_frame(stream)?)?)
-}
-
-pub(crate) fn write_two_frames(stream: &mut TcpStream, f1: &[u8], f2: &[u8]) -> io::Result<()> {
-  let mut buf = Vec::with_capacity(8 + f1.len() + f2.len());
-  buf.extend_from_slice(&(f1.len() as u32).to_le_bytes());
-  buf.extend_from_slice(f1);
-  buf.extend_from_slice(&(f2.len() as u32).to_le_bytes());
-  buf.extend_from_slice(f2);
-  stream.write_all(&buf)?;
-  stream.flush()
-}
-
-pub(crate) fn read_frame(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
-  let mut len_buf = [0u8; 4];
-  stream.read_exact(&mut len_buf)?;
-  let len = u32::from_le_bytes(len_buf) as usize;
-  if len > MAX_CTRL_FRAME_LEN {
-    return Err(io::Error::new(
-      io::ErrorKind::InvalidData,
-      "control frame exceeds maximum length",
-    ));
-  }
-  let mut out = vec![0u8; len];
-  stream.read_exact(&mut out)?;
-  Ok(out)
 }

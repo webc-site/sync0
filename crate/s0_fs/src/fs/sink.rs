@@ -5,10 +5,14 @@ use std::{
   sync::atomic::{AtomicU64, Ordering},
 };
 
-use s0_cdc::{BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, hash128, match_basis_file};
+use s0_cdc::{
+  BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, hash128, match_basis_file, set_bit_usize,
+};
 
 use super::{
-  FsError, copy_file_spans, create_trunc,
+  FsError,
+  cache::precheck_manifest_single_chunks,
+  copy_file_spans, create_trunc, dir_has_entries,
   fd_cache::FdCache,
   open_nonempty_file, open_rw,
   pack::{SmallPack, UNPACKED_OFFSET},
@@ -32,7 +36,7 @@ pub struct SharedSink {
 impl SharedSink {
   /// 初始化接收池：对本地已有同名文件与未完成 `.s0_stage.<filename>` 暂存文件执行 FastCDC 基准匹配，支持零状态文件断点续传
   pub fn prepare(root: &Path, manifest: Manifest) -> Result<Self, FsError> {
-    let root_existed = root.is_dir();
+    let root_existed = dir_has_entries(root);
     fs::create_dir_all(root)?;
     let block_map = manifest.build_block_map();
     let total_blocks = block_map.len() as u32;
@@ -46,10 +50,15 @@ impl SharedSink {
     let (staging_fds, basis_fds) = (FdCache::new(), FdCache::new());
     let (mut bit_cursor, mut delta_cursor) = (0usize, 0u64);
     let (mut basis_idx, mut io_buf, mut last_parent) = (BasisIndex::new(), Vec::new(), None);
+    let prechecked = if root_existed && n_entries >= 16 {
+      precheck_manifest_single_chunks(root, &manifest.entries)
+    } else {
+      Vec::new()
+    };
 
     for (ei, e) in manifest.entries.iter().enumerate() {
       let clean_rel = sanitize_rel_path(&e.path)?;
-      if e.deleted || e.size == 0 {
+      if e.deleted {
         needs_staging.push(false);
         continue;
       }
@@ -60,7 +69,17 @@ impl SharedSink {
         fs::create_dir_all(root.join(parent))?;
         last_parent = Some(parent.to_path_buf());
       }
+      if e.size == 0 {
+        needs_staging.push(false);
+        continue;
+      }
       let base_bit = bit_cursor;
+      if prechecked.get(ei).copied().unwrap_or(false) {
+        set_bit_usize(&mut initial_have_bits, base_bit);
+        bit_cursor = base_bit + 1;
+        needs_staging.push(false);
+        continue;
+      }
       let final_path = root.join(&clean_rel);
       let tmp_path = Self::tmp_path_for(&final_path);
       let mut basis_hit = None;
@@ -115,7 +134,9 @@ impl SharedSink {
         staging_fds.insert(ei as u32, tmp_file);
       } else {
         delta_cursor += e.size;
-        let _ = remove(&tmp_path);
+        if root_existed {
+          let _ = remove(&tmp_path);
+        }
       }
       needs_staging.push(true);
     }
@@ -260,7 +281,9 @@ impl SharedSink {
     let e = &self.manifest.entries[ei];
     let pack_off = self.pack_offsets[ei];
     if pack_off != UNPACKED_OFFSET {
-      self.small_pack.write_at(pack_off, data)?;
+      self
+        .small_pack
+        .write_at(pack_off, || self.root.join(&e.path), data)?;
     } else {
       let tmp = Self::tmp_path_for(&self.root.join(&e.path));
       let f = self
@@ -297,7 +320,9 @@ impl SharedSink {
     if self.needs_staging[ei] {
       let pack_off = self.pack_offsets[ei];
       if pack_off != UNPACKED_OFFSET {
-        self.small_pack.read_at(pack_off, dst)?;
+        self
+          .small_pack
+          .read_at(pack_off, || self.root.join(&e.path), dst)?;
       } else {
         let f = self.staging_fds.get_or_open(loc.entry_idx, || {
           let final_p = self.root.join(&e.path);
@@ -404,6 +429,7 @@ impl SharedSink {
     self.staging_fds.clear();
     self.basis_fds.clear();
     let need_prune = self.manifest.delete_extraneous && !self.manifest.partial;
+    let is_stream = self.small_pack.is_stream();
     let (mut keep_paths, mut pack_jobs) = (Vec::new(), Vec::new());
     for (ei, e) in self.manifest.entries.iter().enumerate() {
       let clean_rel = sanitize_rel_path(&e.path)?;
@@ -420,7 +446,9 @@ impl SharedSink {
       } else if self.needs_staging[ei] {
         let pack_off = self.pack_offsets[ei];
         if pack_off != UNPACKED_OFFSET {
-          pack_jobs.push((final_path, pack_off, e.size as u32));
+          if !is_stream {
+            pack_jobs.push((final_path, pack_off, e.size as u32));
+          }
         } else {
           fs::rename(Self::tmp_path_for(&final_path), &final_path)?;
         }

@@ -1,19 +1,13 @@
 use core::str::from_utf8;
 
 use gxhash::gxhash128;
+pub use s0_const::{FLAG_DELETE, FLAG_PARTIAL, HASH_LEN, MAGIC_LEN, MANIFEST_MAGIC, U15_MAX};
 
 use crate::{CdcConfig, CdcError, Rd, WireError, Wr, find_boundary};
 
-/// 内容寻址清单魔数 `"S0M2"`
-pub const MANIFEST_MAGIC: [u8; 4] = *b"S0M2";
-/// 请求/推送标志位：镜像清理多余文件
-pub const FLAG_DELETE: u8 = 1 << 0;
-/// 请求/推送标志位：增量路径子集更新
-pub const FLAG_PARTIAL: u8 = 1 << 1;
-
 /// 计算数据切片的 128-bit `gxhash128` 硬件 AES/SIMD 加速内容摘要
 #[inline]
-pub fn hash128(data: &[u8]) -> [u8; 16] {
+pub fn hash128(data: &[u8]) -> [u8; HASH_LEN] {
   gxhash128(data, 0).to_le_bytes()
 }
 
@@ -22,7 +16,7 @@ pub fn hash128(data: &[u8]) -> [u8; 16] {
 pub struct ChunkSig {
   pub offset: u64,
   pub len: u32,
-  pub hash: [u8; 16],
+  pub hash: [u8; HASH_LEN],
 }
 
 /// 对内存切片执行 FastCDC 分块并计算每块 128-bit `gxhash128` 摘要
@@ -181,9 +175,9 @@ impl Manifest {
     }
   }
 
-  /// 紧凑二进制序列化（路径采用前缀压缩 + `u15` 变长整数）
+  /// 紧凑二进制序列化（路径采用前缀压缩 + `uvar` 变长整数，零冗余文件长度字段）
   pub fn encode(&self) -> Result<Vec<u8>, CdcError> {
-    let mut out = Vec::with_capacity(16 + self.entries.len() * 32);
+    let mut out = Vec::with_capacity(8 + self.entries.len() * 24);
     let mut w = Wr::new(&mut out);
     w.bytes(&MANIFEST_MAGIC);
     let mut flags = 0u8;
@@ -194,29 +188,31 @@ impl Manifest {
       flags |= FLAG_PARTIAL;
     }
     w.u8(flags);
-    w.u32(self.entries.len() as u32);
+    w.uvar(self.entries.len() as u64);
 
     let mut prev_path: &[u8] = &[];
-    for e in &self.entries {
+    for (i, e) in self.entries.iter().enumerate() {
       let pb = e.path.as_bytes();
-      let shared = prev_path
-        .iter()
-        .zip(pb.iter())
-        .take_while(|(a, b)| a == b)
-        .count()
-        .min(0x7FFF);
-      w.u15(shared)?;
-      w.slice_u15(&pb[shared..])?;
+      if i == 0 {
+        w.slice_u15(pb)?;
+      } else {
+        let shared = prev_path
+          .iter()
+          .zip(pb.iter())
+          .take_while(|(a, b)| a == b)
+          .count()
+          .min(U15_MAX);
+        w.u15(shared)?;
+        w.slice_u15(&pb[shared..])?;
+      }
       prev_path = pb;
 
       if e.deleted {
-        w.u8(1);
+        w.uvar(0);
       } else {
-        w.u8(0);
-        w.u64(e.size);
-        w.u32(e.chunks.len() as u32);
+        w.uvar((e.chunks.len() as u64) + 1);
         for c in &e.chunks {
-          w.u32(c.len);
+          w.uvar(u64::from(c.len));
           w.bytes(&c.hash);
         }
       }
@@ -227,16 +223,16 @@ impl Manifest {
   /// 从紧凑二进制字节流反序列化
   pub fn decode(buf: &[u8]) -> Result<Self, CdcError> {
     let mut r = Rd::new(buf);
-    if r.array::<4>()? != MANIFEST_MAGIC {
+    if r.array::<MAGIC_LEN>()? != MANIFEST_MAGIC {
       return Err(CdcError::Wire(WireError::BadMagic));
     }
     let flags = r.u8()?;
-    let cnt = r.u32()? as usize;
+    let cnt = r.uvar_usize()?;
     let mut entries = Vec::with_capacity(cnt.min(65536));
     let mut prev_path = Vec::<u8>::new();
 
-    for _ in 0..cnt {
-      let shared = r.u15()? as usize;
+    for i in 0..cnt {
+      let shared = if i == 0 { 0 } else { r.u15()? as usize };
       let suffix = r.vec_u15()?;
       if shared > prev_path.len() {
         return Err(CdcError::Wire(WireError::Truncated));
@@ -247,8 +243,8 @@ impl Manifest {
         .map_err(|_| CdcError::Wire(WireError::InvalidUtf8))?
         .to_owned();
 
-      let del_flag = r.u8()?;
-      if del_flag != 0 {
+      let tag = r.uvar()?;
+      if tag == 0 {
         entries.push(ManifestEntry {
           path,
           size: 0,
@@ -256,23 +252,22 @@ impl Manifest {
           deleted: true,
         });
       } else {
-        let size = r.u64()?;
-        let nchunks = r.u32()? as usize;
+        let nchunks = usize::try_from(tag - 1).map_err(|_| CdcError::Wire(WireError::Overflow))?;
         let mut chunks = Vec::with_capacity(nchunks.min(65536));
         let mut off = 0u64;
         for _ in 0..nchunks {
-          let len = r.u32()?;
-          let hash = r.array::<16>()?;
+          let len = r.uvar_u32()?;
+          let hash = r.array::<HASH_LEN>()?;
           chunks.push(ChunkSig {
             offset: off,
             len,
             hash,
           });
-          off += u64::from(len);
+          off = off.saturating_add(u64::from(len));
         }
         entries.push(ManifestEntry {
           path,
-          size,
+          size: off,
           chunks,
           deleted: false,
         });

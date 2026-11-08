@@ -1,3 +1,4 @@
+mod cache;
 mod fd_cache;
 mod filter;
 mod pack;
@@ -12,17 +13,15 @@ use std::{
   thread::{self, available_parallelism},
 };
 
+pub use cache::{SmallCache, scan_and_cache_files, take_or_clone_small_cache};
 pub use filter::{IGNORE_FILE, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in};
 use ignore::Error as IgnoreError;
 pub use path::{
-  MAX_PATH, PathErr, Staging, create_trunc, open_nonempty_file, open_rw, rel_path, remove,
-  safe_join,
+  MAX_PATH, PathErr, Staging, create_trunc, dir_has_entries, open_nonempty_file, open_rw, rel_path,
+  remove, safe_join,
 };
 pub use s0_cdc::is_all_have;
-use s0_cdc::{
-  CdcConfig, CdcError, ChunkSig, CopySpan, Manifest, ManifestEntry, chunk_file,
-  chunk_file_with_buf, copy_file_span,
-};
+use s0_cdc::{CdcConfig, CdcError, CopySpan, Manifest, ManifestEntry, chunk_file, copy_file_span};
 pub use sink::SharedSink;
 pub use source::{BlockSource, SourceReader};
 use thiserror::Error;
@@ -245,69 +244,17 @@ fn chunk_scanned_entries(
   root: &Path,
   scanned: Vec<ScannedFile>,
 ) -> Result<Vec<ManifestEntry>, FsError> {
-  if scanned.len() < 16 {
-    let mut io_buf = Vec::new();
-    let mut entries = Vec::with_capacity(scanned.len());
-    for sf in scanned {
-      let chunks = if sf.size == 0 {
-        Vec::new()
-      } else {
-        let f = File::open(root.join(&sf.path))?;
-        chunk_file_with_buf(&f, sf.size, CdcConfig::DEFAULT, &mut io_buf)?
-      };
-      entries.push(ManifestEntry {
+  let (all_chunks, _cache) = scan_and_cache_files(root, &scanned)?;
+  Ok(
+    scanned
+      .into_iter()
+      .zip(all_chunks)
+      .map(|(sf, chunks)| ManifestEntry {
         path: sf.path,
         size: sf.size,
         chunks,
         deleted: false,
-      });
-    }
-    return Ok(entries);
-  }
-  let (n_threads, chunk_len) = par_chunk_plan(scanned.len());
-  let worker_res: Vec<Result<Vec<Vec<ChunkSig>>, FsError>> = thread::scope(|s| {
-    let mut handles = Vec::with_capacity(n_threads);
-    for slice in scanned.chunks(chunk_len) {
-      handles.push(s.spawn(move || {
-        let mut io_buf = Vec::new();
-        let mut out = Vec::with_capacity(slice.len());
-        for sf in slice {
-          if sf.size == 0 {
-            out.push(Vec::new());
-          } else {
-            let f = File::open(root.join(&sf.path))?;
-            out.push(chunk_file_with_buf(
-              &f,
-              sf.size,
-              CdcConfig::DEFAULT,
-              &mut io_buf,
-            )?);
-          }
-        }
-        Ok(out)
-      }));
-    }
-    handles
-      .into_iter()
-      .map(|h| {
-        h.join()
-          .unwrap_or_else(|_| Err(FsError::Io(io::Error::other("worker panic"))))
       })
-      .collect()
-  });
-  let mut entries = Vec::with_capacity(scanned.len());
-  let mut scanned_it = scanned.into_iter();
-  for res in worker_res {
-    for chunks in res? {
-      if let Some(sf) = scanned_it.next() {
-        entries.push(ManifestEntry {
-          path: sf.path,
-          size: sf.size,
-          chunks,
-          deleted: false,
-        });
-      }
-    }
-  }
-  Ok(entries)
+      .collect(),
+  )
 }

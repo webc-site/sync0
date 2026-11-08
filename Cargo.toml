@@ -9,7 +9,8 @@ license = "Apache-2.0"
 repository = "https://github.com/webc-site/sync0"
 
 [profile.release]
-opt-level = "z"
+# 性能优先：速度优先，跨模块全 LTO 压体积并启用跨 crate 内联
+opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
@@ -18,6 +19,9 @@ overflow-checks = false
 incremental = false
 
 [profile.release.package.s0_cc]
+opt-level = 3
+
+[profile.release.package.s0_const]
 opt-level = 3
 
 [profile.release.package.s0_cdc]

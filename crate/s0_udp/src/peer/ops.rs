@@ -228,6 +228,24 @@ impl PeerNode {
       mf.delete_extraneous = true;
     }
 
+    if sel_paths.is_empty()
+      && opts.byte_range.is_none()
+      && self
+        .shares
+        .read()
+        .get(&share_id)
+        .and_then(|st| st.cached_manifest.as_ref())
+        .is_some_and(|(cached_rh, _)| *cached_rh == root_hash)
+    {
+      return Ok(SyncReport {
+        root_hash,
+        total_blocks: total_blks,
+        blocks_transferred: 0,
+        bytes_transferred: 0,
+        peers_used: 0,
+      });
+    }
+
     let sink = Arc::new(SharedSink::prepare(local_dst, mf)?);
     let total_blocks = sink.total_blocks();
     let (req_lo, req_hi) = if let Some((b_lo, b_hi)) = opts.byte_range {
@@ -241,6 +259,14 @@ impl PeerNode {
         sink.commit_range(req_lo, req_hi)?;
       } else {
         sink.commit()?;
+      }
+      if sel_paths.is_empty()
+        && opts.byte_range.is_none()
+        && req_lo == 0
+        && req_hi == total_blocks
+        && let Some(st) = self.shares.write().get_mut(&share_id)
+      {
+        st.cached_manifest = Some((root_hash, sink.manifest().clone()));
       }
       return Ok(SyncReport {
         root_hash,
@@ -352,6 +378,15 @@ impl PeerNode {
 
     if let Some(st) = self.shares.write().get_mut(&share_id) {
       st.active_sink = None;
+      if pull_res.is_ok()
+        && commit_res.is_ok()
+        && sel_paths.is_empty()
+        && opts.byte_range.is_none()
+        && req_lo == 0
+        && req_hi == total_blocks
+      {
+        st.cached_manifest = Some((root_hash, sink.manifest().clone()));
+      }
     }
 
     let (blocks_transferred, bytes_transferred, peers_used) = pull_res?;
