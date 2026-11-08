@@ -41,18 +41,6 @@ pub struct ResolvedAccess {
 }
 
 impl ResolvedAccess {
-  /// 检查是否有权上传/修改指定相对路径 `rel_path`（默认 `write_prefixes` 为空时允许整个分享根目录）
-  pub fn can_write_path(&self, rel_path: &str) -> bool {
-    if !self.perm.can_write() {
-      return false;
-    }
-    if self.write_prefixes.is_empty() {
-      return true;
-    }
-    let clean = rel_path.trim_matches(['/', '\\']);
-    !clean.is_empty() && matches_any_selected(clean, &self.write_prefixes)
-  }
-
   /// 检查上传请求的路径集合与 `Manifest` 中的全部条目是否均在允许上传的路径前缀范围内
   pub fn can_write_manifest(&self, mf: &Manifest, req_paths: &[String]) -> bool {
     if !self.perm.can_write() {
@@ -137,30 +125,6 @@ impl ShareConfig {
 
   pub fn with_auth(mut self, auth_required: bool) -> Self {
     self.auth_required = auth_required;
-    self
-  }
-
-  pub fn with_default_perm(mut self, perm: Perm) -> Self {
-    self.default_perm = perm;
-    self
-  }
-
-  pub fn with_default_write_prefixes<I, S>(mut self, prefixes: I) -> Self
-  where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-  {
-    self.default_write_prefixes = normalize_prefixes(prefixes);
-    self
-  }
-
-  pub fn with_ro_token(mut self, token: [u8; 16]) -> Self {
-    self.ro_token = Some(token);
-    self
-  }
-
-  pub fn with_rw_token(mut self, token: [u8; 16]) -> Self {
-    self.rw_token = Some(token);
     self
   }
 
@@ -259,7 +223,7 @@ impl ShareConfig {
   }
 
   /// 解析 NestedText (`.nt`) 格式的分享组与用户配置文件
-  pub fn parse_nt(text: &str, base_dir: Option<&Path>) -> Result<Vec<Self>, PeerError> {
+  fn parse_nt(text: &str, base_dir: Option<&Path>) -> Result<Vec<Self>, PeerError> {
     let raw_groups = parse_nt_groups(text, base_dir)?;
     let mut out = Vec::with_capacity(raw_groups.len());
     for g in raw_groups {
@@ -400,11 +364,6 @@ impl<'a> TransferOpts<'a> {
 
   pub const fn with_rate(mut self, req_rate: u64) -> Self {
     self.req_rate = req_rate;
-    self
-  }
-
-  pub const fn with_token(mut self, token: Option<[u8; 16]>) -> Self {
-    self.token = token;
     self
   }
 

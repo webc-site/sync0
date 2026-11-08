@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_cdc::FLAG_DELETE;
 use s0_udp::{
   consts::{DATA_HDR_LEN, Op, Status},
@@ -11,9 +13,9 @@ use s0_udp::{
   },
 };
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]

@@ -1,17 +1,20 @@
 use std::{fs, sync::Arc, thread};
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_udp::fs::{SharedSink, SourceReader, build_manifest_from_path};
+use tempfile::tempdir;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]
 fn test_concurrent_shared_sink_and_basis_reuse() -> Void {
-  let src_dir = tempfile::tempdir()?;
-  let dst_dir = tempfile::tempdir()?;
+  let src_dir = tempdir()?;
+  let dst_dir = tempdir()?;
 
   let mut big = vec![0u8; 260_000];
   for (i, b) in big.iter_mut().enumerate() {

@@ -9,6 +9,5 @@ pub use p2p::{
 };
 pub use pkt::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch, encode_punch_padded};
 pub use tack::{
-  Ack, AckOut, Blocks, Items, Kind, Ranges, SessionHeader, StreamDataHeader, check_ranges,
-  encode_ack, expand_pn,
+  Ack, AckOut, Blocks, Items, Kind, Ranges, SessionHeader, StreamDataHeader, encode_ack, expand_pn,
 };

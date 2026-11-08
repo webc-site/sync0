@@ -80,8 +80,6 @@ pub const FIN_MAGIC: u32 = u32::from_le_bytes(*b"S0BF");
 pub const PROBE_MAGIC: u32 = u32::from_le_bytes(*b"S0PB");
 /// 双栈竞速探测回包 32 位小端魔数（`0x4150_3053` = `"S0PA"`）
 pub const PROBE_ACK_MAGIC: u32 = u32::from_le_bytes(*b"S0PA");
-/// `iroh` 发现帧双栈候选地址魔数（`0x4441_3053` = `"S0AD"`）
-pub const ADDR_MAGIC: u32 = u32::from_le_bytes(*b"S0AD");
 /// 双栈竞速 IPv6 优先裕度（5 ms = 5000 µs）
 pub const V6_PREFER_MARGIN_US: u64 = 5_000;
 
@@ -119,8 +117,6 @@ pub const ZSTD: u8 = 1 << 2;
 pub const PAR: u8 = 1 << 3;
 /// 数据包标志位：校验包数偏移（bit 4..7）
 pub const R_SHIFT: u8 = 4;
-/// 数据包标志位：校验包数掩码
-pub const R_MASK: u8 = 0xF0;
 
 /// 清单单包分片载荷长度（1200 B）
 pub const MANIFEST_CHUNK: usize = 1200;

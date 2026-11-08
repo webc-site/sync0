@@ -12,9 +12,8 @@ use std::{
   thread::{self, available_parallelism},
 };
 
-pub use filter::{
-  IGNORE_FILE, Ignore, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in,
-};
+pub use filter::{IGNORE_FILE, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in};
+use ignore::Error as IgnoreError;
 pub use path::{MAX_PATH, PathErr, Staging, create_trunc, open_rw, rel_path, remove, safe_join};
 pub use s0_cdc::is_all_have;
 use s0_cdc::{
@@ -23,15 +22,16 @@ use s0_cdc::{
 };
 pub use sink::SharedSink;
 pub use source::{BlockSource, SourceReader};
+use thiserror::Error;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum FsError {
   #[error("IO 错误: {0}")]
   Io(#[from] io::Error),
   #[error("CDC 清单错误: {0}")]
   Cdc(#[from] CdcError),
   #[error("目录遍历/忽略规则错误: {0}")]
-  Ignore(#[from] ignore::Error),
+  Ignore(#[from] IgnoreError),
   #[error("块 {0} gxhash128 摘要校验不匹配或长度非法")]
   BlockCorrupted(u32),
   #[error("尚有未完成落盘的块 ({0}/{1})，拒绝原子提交")]

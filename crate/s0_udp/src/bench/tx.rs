@@ -115,17 +115,6 @@ pub fn send_on_sock_opt(
   }
 }
 
-/// 发送目录下指定的增量文件子集
-pub fn send_files(
-  root: &Path,
-  files: Vec<ScannedFile>,
-  peer: SocketAddr,
-  rate: u64,
-  show: bool,
-) -> Result<Stats, UdpError> {
-  send_changes(root, files, Vec::new(), peer, rate, show)
-}
-
 /// 发送目录下指定的增量变更批次
 pub fn send_changes(
   root: &Path,

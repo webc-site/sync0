@@ -79,13 +79,7 @@ impl SharedSink {
           &mut bc,
           &mut delta_cursor,
         )?;
-        if plan.delta_bytes == 0
-          && basis_len == e.size
-          && plan
-            .copy_spans
-            .first()
-            .is_none_or(|s| plan.copy_spans.len() == 1 && s.src_off == 0 && s.dst_off == 0)
-        {
+        if basis_len == e.size && plan.is_identical_to(e.size) {
           let _ = remove(&tmp_path);
           bit_cursor = base_bit + e.chunks.len();
           basis_fds.insert(ei as u32, basis);
@@ -158,7 +152,7 @@ impl SharedSink {
   }
 
   /// 生成目标文件的同目录暂存文件路径 `.s0_stage.<filename>`
-  pub fn tmp_path_for(final_path: &Path) -> PathBuf {
+  fn tmp_path_for(final_path: &Path) -> PathBuf {
     let mut os = OsString::from(".s0_stage.");
     if let Some(name) = final_path.file_name() {
       os.push(name);
@@ -232,22 +226,6 @@ impl SharedSink {
   #[inline]
   pub fn has_block(&self, block_idx: u32) -> bool {
     self.word_has_mask((block_idx >> 6) as usize, 1u64 << (block_idx & 63))
-  }
-
-  /// 计算当前已校验落盘的总块数
-  pub fn verified_block_count(&self) -> u32 {
-    let total = self.total_blocks();
-    let (full_words, rem_bits) = ((total >> 6) as usize, total & 63);
-    let mut done: u32 = self.have_words[..full_words]
-      .iter()
-      .map(|w| w.load(Ordering::Acquire).count_ones())
-      .sum();
-    if rem_bits > 0
-      && let Some(last) = self.have_words.get(full_words)
-    {
-      done += (last.load(Ordering::Acquire) & ((1u64 << rem_bits) - 1)).count_ones();
-    }
-    done
   }
 
   /// 判断区间 `[blk_lo, blk_hi)` 内所有块是否全部到位（$O((\text{hi}-\text{lo})/64)$ 64 位字长掩码判定）
@@ -425,8 +403,9 @@ impl SharedSink {
 
   /// 校验全部块到位后，从 `SmallPack` 并发落盘小文件并将 `.s0_stage.<filename>` 原子重命名为最终文件
   pub fn commit(&self) -> Result<(), FsError> {
-    let (total, done) = (self.total_blocks(), self.verified_block_count());
-    if done != total {
+    let total = self.total_blocks();
+    if !self.is_range_complete(0, total) {
+      let done = (0..total).filter(|&b| self.has_block(b)).count() as u32;
       return Err(FsError::IncompleteCommit(done, total));
     }
     self.staging_fds.clear();

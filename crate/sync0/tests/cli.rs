@@ -1,22 +1,25 @@
 use std::{fs, process::Command};
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_udp::{
   consts::Perm,
   peer::{KeyMode, NodeConfig, PeerNode, ShareConfig},
   profile::ProfileDraft,
   region::Region,
 };
+use tempfile::tempdir;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]
 fn test_cli_id_and_profile() -> Void {
   let bin = env!("CARGO_BIN_EXE_sync0");
-  let temp_home = tempfile::tempdir()?;
+  let temp_home = tempdir()?;
 
   // 默认无需 -c，自动使用 $HOME/.config/sync0
   let out_id = Command::new(bin)
@@ -56,10 +59,10 @@ fn test_cli_id_and_profile() -> Void {
 #[test]
 fn test_cli_pull_and_push_with_base64url_iroh_and_group_uri() -> Void {
   let bin = env!("CARGO_BIN_EXE_sync0");
-  let share_dir = tempfile::tempdir()?;
-  let pull_dst = tempfile::tempdir()?;
-  let push_src = tempfile::tempdir()?;
-  let client_cfg = tempfile::tempdir()?;
+  let share_dir = tempdir()?;
+  let pull_dst = tempdir()?;
+  let push_src = tempdir()?;
+  let client_cfg = tempdir()?;
 
   fs::create_dir_all(share_dir.path().join("docs"))?;
   fs::create_dir_all(share_dir.path().join("pkg"))?;
@@ -141,7 +144,7 @@ fn test_cli_pull_and_push_with_base64url_iroh_and_group_uri() -> Void {
 
   // 4. 对等种子节点发现与全对称做种（每个节点既是服务器也是客户端）：
   // 节点 B 加入节点 A 的分享组后自动成为做种服务器，节点 C 从 A 或 B 均可获取全部可用种子节点并并发拉取
-  let peer_b_dir = tempfile::tempdir()?;
+  let peer_b_dir = tempdir()?;
   let peer_b = PeerNode::start(NodeConfig {
     key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("peer_b", Region::Shanghai),
@@ -154,7 +157,7 @@ fn test_cli_pull_and_push_with_base64url_iroh_and_group_uri() -> Void {
     &[server.endpoint_id()],
   )?;
 
-  let peer_c_dir = tempfile::tempdir()?;
+  let peer_c_dir = tempdir()?;
   let peer_c = PeerNode::start(NodeConfig {
     key_mode: KeyMode::Ephemeral,
     profile: ProfileDraft::new("peer_c", Region::Beijing),

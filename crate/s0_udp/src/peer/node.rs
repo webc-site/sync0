@@ -14,6 +14,7 @@ use gxhash::HashMap;
 use parking_lot::RwLock;
 use s0_cdc::{Manifest, WireError};
 use s0_conf::ConfError;
+use thiserror::Error;
 
 use super::{
   KeyMode, NodeConfig, PeerId, ShareConfig, TransferOpts, derive_share_id, encode_id_b64,
@@ -33,7 +34,7 @@ use crate::{
   },
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum PeerError {
   #[error("IO 错误: {0}")]
   Io(#[from] io::Error),
@@ -205,7 +206,7 @@ impl PeerNode {
 
   /// 本节点控制面地址字节编码
   #[inline]
-  pub fn ctrl_addrs_encoded(&self) -> Vec<u8> {
+  pub(super) fn ctrl_addrs_encoded(&self) -> Vec<u8> {
     encode_socket_addrs(&self.ctrl_addrs)
   }
 

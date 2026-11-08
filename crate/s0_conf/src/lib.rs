@@ -11,8 +11,6 @@ mod rate;
 mod uri;
 
 pub use error::ConfError;
-pub use nt::{
-  NtGroupRule, NtGroupSpec, NtPeerGrant, NtUserSpec, load_users_nt_dir, parse_nt_groups,
-};
+pub use nt::{NtGroupSpec, NtPeerGrant, parse_nt_groups};
 pub use rate::{parse_rate, parse_rate_str};
 pub use uri::{GroupUri, extend_clean_paths_csv, normalize_prefixes};

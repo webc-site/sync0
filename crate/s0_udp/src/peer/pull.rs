@@ -4,7 +4,7 @@ use std::{
   sync::{
     Arc,
     atomic::{AtomicU32, Ordering},
-    mpsc::{self, RecvTimeoutError},
+    mpsc::{RecvTimeoutError, channel},
   },
   thread,
   time::Duration,
@@ -72,7 +72,7 @@ pub(crate) const fn derive_push_session_id(root_hash: &[u8; 16]) -> u32 {
   u32::from_le_bytes([root_hash[0], root_hash[1], root_hash[2], 0])
 }
 
-pub(crate) fn resolve_swarm_peer_addrs(peer: &SwarmPeer) -> Result<Vec<SocketAddr>, PeerError> {
+fn resolve_swarm_peer_addrs(peer: &SwarmPeer) -> Result<Vec<SocketAddr>, PeerError> {
   let mut out = resolve_iroh_endpoints(&peer.endpoint_id);
   if let Ok(decoded) = decode_socket_addrs(&peer.peer_addrs)
     && !decoded.is_empty()
@@ -93,7 +93,7 @@ pub(crate) fn resolve_swarm_peer_addrs(peer: &SwarmPeer) -> Result<Vec<SocketAdd
 }
 
 #[inline]
-pub(crate) fn connect_once(addr: &SocketAddr) -> io::Result<TcpStream> {
+fn connect_once(addr: &SocketAddr) -> io::Result<TcpStream> {
   let step = if addr.ip().is_loopback() {
     Duration::from_millis(350)
   } else {
@@ -113,7 +113,7 @@ pub(crate) fn probe_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerEr
   connect_ctrl_addrs(addrs)
 }
 
-pub fn connect_ctrl_tcp(addr: &SocketAddr) -> Result<TcpStream, PeerError> {
+fn connect_ctrl_tcp(addr: &SocketAddr) -> Result<TcpStream, PeerError> {
   let mut last_err = None;
   for _ in 0..3 {
     match connect_once(addr) {
@@ -136,7 +136,7 @@ pub fn connect_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerError> 
   let v6_opt = addrs.iter().copied().find(SocketAddr::is_ipv6);
   let v4_opt = addrs.iter().copied().find(SocketAddr::is_ipv4);
   if let (Some(v6), Some(v4)) = (v6_opt, v4_opt) {
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = channel();
     let tx6 = tx.clone();
     thread::spawn(move || {
       let _ = tx6.send(connect_once(&v6));
@@ -184,7 +184,7 @@ pub fn connect_ctrl_addrs(addrs: &[SocketAddr]) -> Result<TcpStream, PeerError> 
   Err(last_err.unwrap_or(PeerError::NoHealthyPeer))
 }
 
-pub(crate) fn pull_range_from_swarm_peer(
+fn pull_range_from_swarm_peer(
   job: RangePullJob<'_>,
   reused_stream: Option<TcpStream>,
 ) -> Result<(u32, u64, TcpStream), PeerError> {

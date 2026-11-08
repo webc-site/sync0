@@ -1,9 +1,11 @@
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_cdc::{CdcConfig, Manifest, ManifestEntry, chunk_slice, for_each_missing_span, set_bit};
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]

@@ -22,7 +22,7 @@ pub struct SwarmPeer {
 }
 
 impl SwarmPeer {
-  pub fn encode_into(&self, w: &mut Wr<'_>) -> Result<(), WireError> {
+  fn encode_into(&self, w: &mut Wr<'_>) -> Result<(), WireError> {
     w.bytes(&self.endpoint_id);
     w.u16(self.region.as_u16());
     w.u16(0);
@@ -34,7 +34,7 @@ impl SwarmPeer {
     Ok(())
   }
 
-  pub fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
+  fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
     let endpoint_id = r.array::<32>()?;
     let region = Region::from_u16(r.u16()?);
     let _rsv = r.u16()?;
@@ -67,7 +67,7 @@ pub struct ShareSummary {
 }
 
 impl ShareSummary {
-  pub fn encode_into(&self, w: &mut Wr<'_>) -> Result<(), WireError> {
+  fn encode_into(&self, w: &mut Wr<'_>) -> Result<(), WireError> {
     w.bytes(&self.share_id);
     w.slice_u15(self.name.as_bytes())?;
     w.u8(self.perm as u8);
@@ -79,7 +79,7 @@ impl ShareSummary {
     Ok(())
   }
 
-  pub fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
+  fn decode_from(r: &mut Rd<'_>) -> Result<Self, WireError> {
     let share_id = r.array::<16>()?;
     let name = r.str_u15()?.to_owned();
     let perm = Perm::from_repr(r.u8()?).ok_or(WireError::BadStatus)?;

@@ -7,6 +7,8 @@ use std::{
 };
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_udp::{
   Config, Outcome, RangeSpec, Receiver, UdpError,
   bench::handle_probe_observed,
@@ -16,16 +18,17 @@ use s0_udp::{
   probe_external_udp_addr, punch_udp, recv_range_udp, send_range_udp,
   wire::{DataHeader, StreamDataHeader, decode_punch, encode_punch_padded},
 };
+use tempfile::tempdir;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]
 fn test_multi_peer_striped_udp_range_transfer() -> Void {
-  let src_dir = tempfile::tempdir()?;
-  let dst_dir = tempfile::tempdir()?;
+  let src_dir = tempdir()?;
+  let dst_dir = tempdir()?;
 
   let mut payload = vec![0u8; 600_000];
   let mut rng = 0x1234_5678u64;
@@ -108,8 +111,8 @@ fn test_multi_peer_striped_udp_range_transfer() -> Void {
 
 #[test]
 fn test_anti_amplification_and_nat_real_port_measurement() -> Void {
-  let src_dir = tempfile::tempdir()?;
-  let dst_dir = tempfile::tempdir()?;
+  let src_dir = tempdir()?;
+  let dst_dir = tempdir()?;
   let payload = vec![0x5Au8; 131_072];
   fs::write(src_dir.path().join("data.bin"), &payload)?;
 
@@ -206,9 +209,9 @@ fn test_anti_amplification_and_nat_real_port_measurement() -> Void {
 
 #[test]
 fn test_anti_poisoning_and_in_progress_seeding() -> Void {
-  let src_dir = tempfile::tempdir()?;
-  let leecher_dir = tempfile::tempdir()?;
-  let peer3_dir = tempfile::tempdir()?;
+  let src_dir = tempdir()?;
+  let leecher_dir = tempdir()?;
+  let peer3_dir = tempdir()?;
 
   let mut payload = vec![0u8; 320_000];
   for (i, b) in payload.iter_mut().enumerate() {
@@ -336,8 +339,8 @@ fn test_anti_poisoning_and_in_progress_seeding() -> Void {
 
 #[test]
 fn test_small_file_superblock_and_pack_stream() -> Void {
-  let src_dir = tempfile::tempdir()?;
-  let dst_dir = tempfile::tempdir()?;
+  let src_dir = tempdir()?;
+  let dst_dir = tempdir()?;
 
   // 构造 > 8 MiB 的多小文件集合（750 个 12 KiB 小文件 = 9 MiB），同时触发：
   // 1. 发送端 SuperBlock 跨小文件合并压缩（每 5 个 12 KiB 小文件自动聚合为一个 <= 64 KiB SuperBlock）；

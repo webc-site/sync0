@@ -236,7 +236,6 @@ dependencies = [
  "compio-fs",
  "compio-io",
  "compio-log",
- "compio-net",
  "compio-runtime",
 ]
 
@@ -320,12 +319,9 @@ checksum = "c3a354e085c4046dd8d2d9d514cf8c15c615eb8adf6c5f41dbf7899420457e9b"
 dependencies = [
  "compio-buf",
  "futures-util",
- "libc",
  "pastey",
  "pin-project-lite",
- "rustix",
  "synchrony",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -335,27 +331,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9dd867f29de59e4eff577dfeee3744cb0a264249f3faaf11945e8be79a3c3c62"
 dependencies = [
  "tracing",
-]
-
-[[package]]
-name = "compio-net"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31737ec57865d2b46284def673cd21fe478c592ca05c1e040e10d457aac6c2a8"
-dependencies = [
- "compio-buf",
- "compio-driver",
- "compio-io",
- "compio-runtime",
- "either",
- "futures-util",
- "libc",
- "once_cell",
- "pin-project-lite",
- "socket2",
- "synchrony",
- "widestring",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -529,12 +504,6 @@ dependencies = [
  "subtle",
  "zeroize",
 ]
-
-[[package]]
-name = "either"
-version = "1.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "errno"
@@ -1263,11 +1232,8 @@ version = "0.1.0"
 dependencies = [
  "aok",
  "ctor",
- "fastrand",
  "gxhash",
- "log",
  "log_init",
- "tempfile",
  "thiserror",
 ]
 
@@ -1303,7 +1269,6 @@ dependencies = [
  "ignore",
  "parking_lot",
  "s0_cdc",
- "s0_wire",
  "thiserror",
 ]
 
@@ -1321,7 +1286,6 @@ dependencies = [
  "aok",
  "ctor",
  "fastrand",
- "log",
  "log_init",
  "s0_cdc",
  "s0_udp",
@@ -1333,8 +1297,6 @@ version = "0.1.0"
 dependencies = [
  "aok",
  "ctor",
- "fastrand",
- "log",
  "log_init",
  "s0_conf",
  "s0_udp",

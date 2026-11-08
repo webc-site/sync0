@@ -206,11 +206,6 @@ fn parse_dir_chunk<'a>(pkt: &'a [u8], dir_le: &[u8; 4]) -> Option<(usize, usize,
   ManifestRx::valid_chunk(total_len, idx, payload.len()).then_some((total_len, idx, payload))
 }
 
-/// 在已绑定的 UDP 套接字上接收一轮传输
-pub fn recv_on_sock(sock: &UdpSocket, out: &Path, show: bool) -> Result<Stats, UdpError> {
-  recv_on_sock_opt(sock, out, show, false)
-}
-
 /// 在已绑定的 UDP 套接字上接收一轮传输（支持接收端配置级 `delete` 策略）
 pub fn recv_on_sock_opt(
   sock: &UdpSocket,

@@ -10,20 +10,20 @@ use crate::{ConfError, normalize_prefixes, parse_rate};
 
 /// 单用户在特定分享组下的覆盖规则
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NtGroupRule {
-  pub perm: Option<String>,
-  pub rate: Option<u64>,
-  pub write_prefixes: Option<Vec<String>>,
+struct NtGroupRule {
+  perm: Option<String>,
+  rate: Option<u64>,
+  write_prefixes: Option<Vec<String>>,
 }
 
 /// 单用户 `.nt` 配置文件解析结果
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NtUserSpec {
-  pub ids: Vec<String>,
-  pub perm: Option<String>,
-  pub rate: Option<u64>,
-  pub write_prefixes: Vec<String>,
-  pub groups: HashMap<String, NtGroupRule>,
+struct NtUserSpec {
+  ids: Vec<String>,
+  perm: Option<String>,
+  rate: Option<u64>,
+  write_prefixes: Vec<String>,
+  groups: HashMap<String, NtGroupRule>,
 }
 
 /// 分享组内解析展开后的单节点授权项
@@ -145,7 +145,7 @@ pub fn parse_nt_groups(text: &str, base_dir: Option<&Path>) -> Result<Vec<NtGrou
 }
 
 /// 加载用户配置目录下的全部 `*.nt` 文件（每个用户单独一个 `.nt` 配置文件）
-pub fn load_users_nt_dir(dir: &Path) -> Result<Vec<(String, NtUserSpec)>, ConfError> {
+fn load_users_nt_dir(dir: &Path) -> Result<Vec<(String, NtUserSpec)>, ConfError> {
   if !dir.is_dir() {
     return Ok(Vec::new());
   }

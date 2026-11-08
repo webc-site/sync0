@@ -1,6 +1,6 @@
 use std::str::from_utf8;
 
-use phf::phf_set;
+use phf::{Set, phf_set};
 use s0_wire::consts::MAX_BLOCK;
 
 use super::{Codec, Result, block::SLACK};
@@ -15,7 +15,7 @@ const PROBE_SAMPLE: usize = 16 * 1024;
 const EXT_MAX: usize = 12;
 
 /// 已压缩 / 不可压扩展名
-static SKIP_EXT: phf::Set<&'static str> = phf_set! {
+static SKIP_EXT: Set<&'static str> = phf_set! {
   "zip", "gz", "tgz", "zst", "xz", "7z", "rar", "bz2", "lz4", "br",
   "jpg", "jpeg", "png", "gif", "webp", "avif", "heic",
   "mp4", "mkv", "mov", "avi", "webm", "flv",

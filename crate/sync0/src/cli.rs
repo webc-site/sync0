@@ -19,8 +19,9 @@ use s0_udp::{
   profile::{ProfileDraft, ProfileError},
   region::Region,
 };
+use thiserror::Error;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub(crate) enum CliError {
   #[error(transparent)]
   Addr(#[from] AddrParseError),

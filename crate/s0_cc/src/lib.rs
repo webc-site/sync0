@@ -7,6 +7,4 @@ mod rtt;
 
 pub use amp::{AntiAmp, DEFAULT_AMP_FACTOR};
 pub use cc::{Cc, delay_cwnd_gain, delay_pacing_gain};
-pub use rtt::{
-  MAX_REO_US, MAX_RTO_US, MAX_TACK_US, MIN_RTO_US, MIN_TACK_US, RttEstimator, ack_interval_us,
-};
+pub use rtt::{MAX_RTO_US, MAX_TACK_US, MIN_TACK_US, RttEstimator, ack_interval_us};

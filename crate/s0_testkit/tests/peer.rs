@@ -6,6 +6,8 @@ use std::{
 };
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_conf::GroupUri;
 use s0_udp::{
   consts::Status,
@@ -19,10 +21,11 @@ use s0_udp::{
   region::Region,
   wire::SwarmPeer,
 };
+use tempfile::tempdir;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 fn start_node(name: &str, region: Region) -> Result<Arc<PeerNode>, PeerError> {
@@ -34,10 +37,10 @@ fn start_node(name: &str, region: Region) -> Result<Arc<PeerNode>, PeerError> {
 
 #[test]
 fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
-  let share_dir = tempfile::tempdir()?;
-  let models_dir = tempfile::tempdir()?;
-  let dst_dir = tempfile::tempdir()?;
-  let upload_src = tempfile::tempdir()?;
+  let share_dir = tempdir()?;
+  let models_dir = tempdir()?;
+  let dst_dir = tempdir()?;
+  let upload_src = tempdir()?;
 
   fs::create_dir_all(share_dir.path().join("docs"))?;
   fs::create_dir_all(share_dir.path().join("assets/icons"))?;
@@ -75,7 +78,7 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
 
   // 1. 单个用户 (node_a) 同时托管多个文件分享组，采用 NestedText (.nt) 格式配置：
   // 支持配置用户目录 `users_dir` 自动包含该目录下的全部 `.nt` 用户文件，用户与上传路径前缀均使用无序列表 (`-`)
-  let cfg_dir = tempfile::tempdir()?;
+  let cfg_dir = tempdir()?;
   let members_dir = cfg_dir.path().join("members");
   fs::create_dir_all(&members_dir)?;
 
@@ -135,7 +138,7 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
   assert!(!dst_dir.path().join("top.txt").exists());
 
   // 拉取同一用户下的第二个分享组 `ai-models`
-  let models_dst = tempfile::tempdir()?;
+  let models_dst = tempdir()?;
   node_b.pull(
     alice_id,
     "ai-models",
@@ -204,10 +207,10 @@ fn test_multi_group_multi_select_and_upload_prefix_permissions() -> Void {
 
 #[test]
 fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
-  let origin_dir = tempfile::tempdir()?;
-  let sub_full_dir = tempfile::tempdir()?;
-  let sub_part_dir = tempfile::tempdir()?;
-  let client_dir = tempfile::tempdir()?;
+  let origin_dir = tempdir()?;
+  let sub_full_dir = tempdir()?;
+  let sub_part_dir = tempdir()?;
+  let client_dir = tempdir()?;
 
   let mut big_data = vec![0u8; 600_000];
   let mut s = 0xCAFE_BABEu64;
@@ -286,11 +289,7 @@ fn test_long_lived_subscribers_act_as_dragonfly_p2p_swarm_seeds() -> Void {
 
 #[test]
 fn test_group_mutual_backup_full_and_multi_select() -> Void {
-  let (dir1, dir2, dir3) = (
-    tempfile::tempdir()?,
-    tempfile::tempdir()?,
-    tempfile::tempdir()?,
-  );
+  let (dir1, dir2, dir3) = (tempdir()?, tempdir()?, tempdir()?);
   let p1 = start_node("p1", Region::Shenzhen)?;
   let p2 = start_node("p2", Region::HongKong)?;
   let p3 = start_node("p3", Region::Taipei)?;
@@ -360,12 +359,7 @@ fn test_byte_weighted_stripes_for_mixed_file_sizes() -> Void {
 
 #[test]
 fn test_vod_byte_range_crash_resume_and_dualstack_happy_eyeballs() -> Void {
-  let (src_dir, vod_dir, resume_dir, v6_dst_dir) = (
-    tempfile::tempdir()?,
-    tempfile::tempdir()?,
-    tempfile::tempdir()?,
-    tempfile::tempdir()?,
-  );
+  let (src_dir, vod_dir, resume_dir, v6_dst_dir) = (tempdir()?, tempdir()?, tempdir()?, tempdir()?);
 
   let mut video_data = vec![0u8; 800_000];
   let mut rng = 0x9E37_79B9_7F4A_7C15u64;

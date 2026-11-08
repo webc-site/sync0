@@ -91,19 +91,8 @@ pub fn chunk_file_with_buf(
   }
   let est = usize::try_from(size / (cfg.avg_size.max(1) as u64)).unwrap_or(0) + 2;
   let mut out = Vec::with_capacity(est);
-  for_each_file_chunk_with_buf(file, size, cfg, buf, |sig| out.push(sig))?;
+  for_each_file_chunk_from_with_buf(file, 0, size, cfg, buf, |sig| out.push(sig))?;
   Ok(out)
-}
-
-/// 复用调用方缓冲 `buf` 遍历文件的每个 CDC 块签名（消除多文件循环中的重复堆分配）
-pub fn for_each_file_chunk_with_buf(
-  file: &File,
-  size: u64,
-  cfg: CdcConfig,
-  buf: &mut Vec<u8>,
-  on_sig: impl FnMut(ChunkSig),
-) -> Result<(), CdcError> {
-  for_each_file_chunk_from_with_buf(file, 0, size, cfg, buf, on_sig)
 }
 
 /// 从指定起始偏移 `start_off` 流式对文件后缀 `[start_off, size)` 执行 FastCDC 分块与签名

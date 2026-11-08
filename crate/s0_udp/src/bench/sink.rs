@@ -281,13 +281,7 @@ impl Sink {
             &mut bit_cursor,
             &mut delta_total,
           )?;
-          if plan.delta_bytes == 0
-            && basis_size == e.size
-            && plan.copy_spans.len() == 1
-            && plan.copy_spans[0].src_off == 0
-            && plan.copy_spans[0].dst_off == 0
-            && plan.copy_spans[0].len == e.size
-          {
+          if basis_size == e.size && plan.is_identical_to(e.size) {
             continue;
           }
           sk.apply_plan(plan, Some(basis_file), target.to_path_buf(), e.size)?;

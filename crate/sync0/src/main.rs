@@ -2,10 +2,12 @@ mod cli;
 
 use std::{net::SocketAddr, path::PathBuf, process::ExitCode};
 
+use clap_args::parse;
 use cli::{
   CliError, build_cli, build_cli_share_cfg, park_forever, parse_key_mode, parse_peer_uri_path_args,
   parse_profile_draft, resolve_send_target, start_node,
 };
+use log_init::init;
 use rusty_alloc_default as _;
 use s0_conf::GroupUri;
 use s0_i18n::t;
@@ -16,7 +18,7 @@ use s0_udp::{
 };
 
 fn main() -> ExitCode {
-  log_init::init();
+  init();
   if let Err(e) = run() {
     let i18n = t();
     eprintln!("sync0 {}: {e}", i18n.err_prefix);
@@ -27,7 +29,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), CliError> {
   let i18n = t();
-  let m = clap_args::parse!(|cmd| build_cli(cmd, i18n));
+  let m = parse!(|cmd| build_cli(cmd, i18n));
   let Some(m) = m else {
     return Ok(());
   };
