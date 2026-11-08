@@ -472,12 +472,10 @@ fn apply_nt_users_list(
           continue;
         }
 
-        let mut ref_user: Option<&str> = None;
-        for (k, val) in pairs {
-          if matches!(k.as_str(), "user" | "name") {
-            ref_user = val.as_str().map(str::trim);
-          }
-        }
+        let ref_user = pairs
+          .iter()
+          .find(|(k, _)| matches!(k.as_str(), "user" | "name"))
+          .and_then(|(_, v)| v.as_str().map(str::trim));
         let inline_spec = parse_user_nt_value("", item);
         if let Some(uname) = ref_user
           && let Some((_, uspec)) = dir_users.iter().find(|(u, _)| u == uname)

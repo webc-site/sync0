@@ -44,8 +44,8 @@ pub(crate) const TX_CACHE_SLOTS: usize = 2048;
 pub(crate) const MAX_NACK_RESEND_BATCH: u32 = 512;
 /// 单个对等节点允许的最大块摘要校验失败次数（达到阈值判定为恶意投毒并拉黑驱逐）
 pub(crate) const MAX_POISON_STRIKES: u8 = 3;
-/// 广域网单节点默认平滑发送速率（22 MB/s = 176 Mbps，匹配跨洋单流 BDP 并防止路由器队列溢出丢包）
-pub(crate) const WAN_DEFAULT_RATE_BPS: u64 = 22_000_000;
+/// 广域网单节点默认平滑发送速率（48 MB/s = 384 Mbps，匹配高 BDP 跨国链路并由微突发 Pacer 平滑防溢出）
+pub(crate) const WAN_DEFAULT_RATE_BPS: u64 = 48_000_000;
 /// SuperBlock 聚合小文件与可压小分块的单块最大触发阈值（32 KiB）
 pub(crate) const SUPER_SMALL_LIMIT: u32 = 32 * 1024;
 /// SuperBlock 聚合后的最大原始字节数（64 KiB）

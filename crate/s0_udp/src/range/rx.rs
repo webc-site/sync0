@@ -14,9 +14,11 @@ use crate::{
   UdpError,
   bench::now_us,
   codec::{Codec, SLACK},
-  consts::{DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, ZSTD_DEFAULT_LEVEL},
+  consts::{
+    DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, PKT_PUNCH, ZSTD_DEFAULT_LEVEL,
+  },
   fs::{FsError, SharedSink},
-  wire::{AckPkt, DataHeader, NackPkt, encode_punch},
+  wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch},
 };
 
 const MAX_POOL_BUFS: usize = 64;
@@ -29,6 +31,11 @@ struct PartialSlot {
   received_segs: u16,
   zstd: bool,
   buf: Vec<u8>,
+}
+
+#[inline]
+fn update_locked_peer(locked: &mut Option<SocketAddr>, from: SocketAddr) {
+  *locked = Some(from);
 }
 
 /// 原生 UDP 区间接收引擎（支持 SuperBlock 跨小文件批量解包 + 逐文件 BLAKE3-128 摘要防投毒校验 + $O(1)$ 内存缓冲池）
@@ -52,11 +59,11 @@ pub fn recv_range_udp(
   }
 
   let is_loopback = peer_addrs.first().is_some_and(|a| a.ip().is_loopback());
-  let nack_interval_us: u64 = if is_loopback { 15_000 } else { 320_000 };
-  let idle_nack_us: u64 = if is_loopback { 15_000 } else { 90_000 };
-  let gap_nack_interval_us: u64 = if is_loopback { MIN_TACK_US } else { 80_000 };
+  let nack_interval_us: u64 = if is_loopback { 15_000 } else { 140_000 };
+  let idle_nack_us: u64 = if is_loopback { 15_000 } else { 36_000 };
+  let gap_nack_interval_us: u64 = if is_loopback { MIN_TACK_US } else { 20_000 };
 
-  sock.set_read_timeout(Some(Duration::from_millis(16)))?;
+  sock.set_read_timeout(Some(Duration::from_millis(6)))?;
   let mut partials_map: HashMap<u32, PartialSlot> = HashMap::default();
   let mut buf_pool: Vec<Vec<u8>> = Vec::with_capacity(MAX_POOL_BUFS);
   let mut codec = Codec::new(ZSTD_DEFAULT_LEVEL)?;
@@ -74,8 +81,10 @@ pub fn recv_range_udp(
   let mut poison_strikes = 0u8;
 
   let punch_pkt = encode_punch(sid24);
-  for _ in 0..3 {
-    let _ = sock.send_to(&punch_pkt, peer_addrs[0]);
+  for _ in 0..2 {
+    for &addr in peer_addrs {
+      let _ = sock.send_to(&punch_pkt, addr);
+    }
   }
 
   let timeout_us = spec.timeout.as_micros() as u64;
@@ -83,6 +92,13 @@ pub fn recv_range_udp(
   while now_us() < deadline_us {
     match sock.recv_from(&mut pkt_buf) {
       Ok((n, from)) => {
+        if n > 0 && pkt_buf[0] == PKT_PUNCH {
+          if decode_punch(&pkt_buf[..n]) == Ok(sid24) {
+            let _ = sock.send_to(&punch_pkt, from);
+            update_locked_peer(&mut locked_peer, from);
+          }
+          continue;
+        }
         if n < DATA_HDR_LEN || (pkt_buf[0] & 0x80) != 0 {
           continue;
         }
@@ -110,7 +126,7 @@ pub fn recv_range_udp(
         {
           continue;
         }
-        locked_peer = Some(from);
+        update_locked_peer(&mut locked_peer, from);
         last_rx_us = now_us();
         deadline_us = last_rx_us.saturating_add(timeout_us);
         idle_nacked = false;
@@ -166,7 +182,6 @@ pub fn recv_range_udp(
         }
 
         let completed_slot = if seg_cnt == 1 {
-          // 单分片块快速路径：无需插入 `partials_map`，零哈希表开销直接校验落盘
           Some((
             extra_blocks,
             zstd,
@@ -276,7 +291,7 @@ pub fn recv_range_udp(
       Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
         let targets = if let Some(ref p) = locked_peer {
           from_ref(p)
-        } else if start.elapsed() < Duration::from_millis(350) {
+        } else if start.elapsed() < Duration::from_millis(15) {
           &peer_addrs[..1]
         } else {
           peer_addrs
@@ -306,10 +321,9 @@ pub fn recv_range_udp(
               &mut nack_buf,
             )?;
           }
-        } else if (!idle_nacked
-          && now >= last_rx_us.saturating_add(idle_nack_us)
-          && now >= last_nack_us.saturating_add(idle_nack_us))
-          || now >= last_nack_us.saturating_add(nack_interval_us)
+        } else if now >= last_rx_us.saturating_add(idle_nack_us)
+          && ((!idle_nacked && now >= last_nack_us.saturating_add(idle_nack_us))
+            || now >= last_nack_us.saturating_add(nack_interval_us))
         {
           idle_nacked = true;
           last_nack_us = now;
@@ -319,6 +333,19 @@ pub fn recv_range_udp(
             sid24,
             sink,
             (expected_blk, hi),
+            &partials_map,
+            &mut nack_buf,
+          )?;
+        } else if expected_blk < highest_seen_blk
+          && now >= last_nack_us.saturating_add(nack_interval_us)
+        {
+          last_nack_us = now;
+          send_nack_for_range(
+            sock,
+            targets,
+            sid24,
+            sink,
+            (expected_blk, highest_seen_blk),
             &partials_map,
             &mut nack_buf,
           )?;

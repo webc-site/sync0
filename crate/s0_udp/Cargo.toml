@@ -10,6 +10,7 @@ readme = "../../README.md"
 [dependencies]
 base64 = "0.23.1"
 coarsetime = "0.1.38"
+compio = { version = "0.19.2", features = ["runtime", "io", "net", "fs"] }
 ed25519-dalek = "3.0.0"
 fastrand = "2.5.0"
 gxhash = "3.5.0"

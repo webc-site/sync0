@@ -1,12 +1,18 @@
 mod config;
 mod node;
+mod ops;
+mod pull;
+mod registry;
 mod server;
+mod sub;
 mod swarm;
 
 pub use config::{
-  KeyMode, NodeConfig, PeerId, PeerQuota, ResolvedAccess, ShareConfig, active_iroh_peers,
-  decode_id_b64, default_config_dir, derive_share_id, encode_id_b64, encode_iroh_b64, min_nonzero,
-  parse_iroh_ids_csv, register_iroh_endpoint, resolve_iroh_endpoint,
+  NodeConfig, PeerQuota, ResolvedAccess, ShareConfig, derive_share_id, min_nonzero,
 };
 pub use node::{PeerError, PeerNode, SyncReport, TransferOpts};
+pub use registry::{
+  KeyMode, PeerId, active_iroh_peers, decode_id_b64, default_config_dir, encode_id_b64,
+  encode_iroh_b64, parse_iroh_ids_csv, register_iroh_endpoint, resolve_iroh_endpoint,
+};
 pub use swarm::{plan_stripes, rank_swarm_peers};

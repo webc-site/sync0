@@ -27,6 +27,7 @@ struct SendCtx<'a> {
   seg_payload: usize,
   session_id: u32,
   blk_lo: u32,
+  last_entry_idx: u32,
   init_cooldown_us: u64,
   retrans_cooldown_us: u64,
   source: BlockSource<'a>,
@@ -41,6 +42,14 @@ struct SendCtx<'a> {
 }
 
 impl<'a> SendCtx<'a> {
+  #[inline]
+  fn update_peer_addr(&mut self, from: SocketAddr) {
+    if self.peer_addr != from {
+      self.peer_addr = from;
+      self.seg_payload = seg_payload_for_addr(from);
+    }
+  }
+
   /// 发送连续小文件聚合块（SuperBlock）或常规单块，返回 `(实际发送原始字节数, 覆盖的块数, 末尾块索引)`
   fn send_next_coalesced(
     &mut self,
@@ -52,6 +61,10 @@ impl<'a> SendCtx<'a> {
     let Some(first_loc) = self.source.block_loc(start_blk) else {
       return Ok((0, 0, start_blk));
     };
+    if first_loc.entry_idx != self.last_entry_idx {
+      self.last_entry_idx = first_loc.entry_idx;
+      self.detector.reset_file();
+    }
     let coalesce_limit = if self.detector.is_compressible() {
       SUPER_SMALL_LIMIT
     } else {
@@ -270,6 +283,46 @@ impl<'a> SendCtx<'a> {
     }
     Ok(bytes)
   }
+
+  fn process_ctrl_pkt(
+    &mut self,
+    pkt: &[u8],
+    from: SocketAddr,
+    sid24: u32,
+    hi_bound: u32,
+  ) -> Result<(bool, Option<u64>), UdpError> {
+    if pkt.is_empty() {
+      return Ok((false, None));
+    }
+    match pkt[0] {
+      PKT_PUNCH => {
+        if decode_punch(pkt) == Ok(sid24) {
+          self.update_peer_addr(from);
+        }
+        Ok((false, None))
+      }
+      PKT_ACK => {
+        if let Ok(ack) = AckPkt::decode(pkt)
+          && ack.session_id == sid24
+        {
+          self.update_peer_addr(from);
+          return Ok((true, None));
+        }
+        Ok((false, None))
+      }
+      PKT_NACK => {
+        if let Ok(nack) = NackPkt::decode(pkt)
+          && nack.session_id == sid24
+        {
+          self.update_peer_addr(from);
+          let resent = self.handle_nack(&nack, hi_bound)?;
+          return Ok((false, Some(resent)));
+        }
+        Ok((false, None))
+      }
+      _ => Ok((false, None)),
+    }
+  }
 }
 
 /// 原生 UDP 区间发送引擎（支持 `BlockSource`、SuperBlock 小文件跨块压缩、`Detector` 不可压流跳过、2048 槽位环缓存与分片级掩码重传）
@@ -301,8 +354,9 @@ pub fn send_range_udp<'a>(
     seg_payload: seg_payload_for_addr(peer_addr),
     session_id: spec.session_id,
     blk_lo: spec.blk_lo,
-    init_cooldown_us: if is_loopback { 10_000 } else { 150_000 },
-    retrans_cooldown_us: if is_loopback { 10_000 } else { 290_000 },
+    last_entry_idx: u32::MAX,
+    init_cooldown_us: if is_loopback { 10_000 } else { 85_000 },
+    retrans_cooldown_us: if is_loopback { 10_000 } else { 110_000 },
     source,
     codec: Codec::new(ZSTD_DEFAULT_LEVEL)?,
     detector: Detector::with_flags(false, true),
@@ -322,16 +376,16 @@ pub fn send_range_udp<'a>(
   let mut amp: AntiAmp<SocketAddr> = AntiAmp::default();
   let timeout_us = spec.timeout.as_micros() as u64;
   let mut deadline_us = now_us().saturating_add(timeout_us);
+  let punch_pkt = encode_punch(sid24);
 
   // 协议层抗反射放大与真实 NAT 端口锁定：在收到对端携带匹配 24-bit session_id 的 PKT_PUNCH / PKT_NACK / PKT_ACK 前绝不发送 64KiB 数据块
   sock.set_nonblocking(false)?;
-  sock.set_read_timeout(Some(Duration::from_millis(12)))?;
-  let punch_pkt = encode_punch(sid24);
+  sock.set_read_timeout(Some(Duration::from_millis(6)))?;
   while !amp.is_validated() {
     if now_us() >= deadline_us {
       return Err(UdpError::Timeout(spec.blk_lo, hi));
     }
-    let targets = if start.elapsed() < Duration::from_millis(350) {
+    let targets = if start.elapsed() < Duration::from_millis(15) {
       &peer_addrs[..1]
     } else {
       peer_addrs
@@ -354,8 +408,7 @@ pub fn send_range_udp<'a>(
         if valid_sid {
           let _ = amp.on_recv(from, n);
           amp.mark_validated();
-          ctx.peer_addr = from;
-          ctx.seg_payload = seg_payload_for_addr(from);
+          ctx.update_peer_addr(from);
           if ctrl_buf[0] == PKT_ACK {
             return Ok(UdpStats {
               bytes_transferred: 0,
@@ -396,68 +449,38 @@ pub fn send_range_udp<'a>(
     blk = end_blk + 1;
 
     while let Ok((n, from)) = sock.recv_from(&mut ctrl_buf) {
-      if n == 0 {
-        continue;
+      let (acked, resent_opt) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, blk)?;
+      if acked {
+        sock.set_nonblocking(false)?;
+        return Ok(UdpStats {
+          bytes_transferred,
+          blocks_transferred,
+          elapsed_us: start.elapsed().as_micros() as u64,
+        });
       }
-      match ctrl_buf[0] {
-        PKT_ACK => {
-          if let Ok(ack) = AckPkt::decode(&ctrl_buf[..n])
-            && ack.session_id == sid24
-          {
-            ctx.peer_addr = from;
-            sock.set_nonblocking(false)?;
-            return Ok(UdpStats {
-              bytes_transferred,
-              blocks_transferred,
-              elapsed_us: start.elapsed().as_micros() as u64,
-            });
-          }
-        }
-        PKT_NACK => {
-          if let Ok(nack) = NackPkt::decode(&ctrl_buf[..n])
-            && nack.session_id == sid24
-          {
-            ctx.peer_addr = from;
-            bytes_transferred += ctx.handle_nack(&nack, blk)?;
-          }
-        }
-        _ => {}
+      if let Some(resent) = resent_opt {
+        bytes_transferred += resent;
       }
     }
   }
   sock.set_nonblocking(false)?;
-  sock.set_read_timeout(Some(Duration::from_millis(12)))?;
+  sock.set_read_timeout(Some(Duration::from_millis(6)))?;
   deadline_us = now_us().saturating_add(timeout_us);
 
   while now_us() < deadline_us {
     match sock.recv_from(&mut ctrl_buf) {
       Ok((n, from)) => {
-        if n == 0 {
-          continue;
+        let (acked, resent_opt) = ctx.process_ctrl_pkt(&ctrl_buf[..n], from, sid24, hi)?;
+        if acked {
+          return Ok(UdpStats {
+            bytes_transferred,
+            blocks_transferred,
+            elapsed_us: start.elapsed().as_micros() as u64,
+          });
         }
-        match ctrl_buf[0] {
-          PKT_ACK => {
-            if let Ok(ack) = AckPkt::decode(&ctrl_buf[..n])
-              && ack.session_id == sid24
-            {
-              ctx.peer_addr = from;
-              return Ok(UdpStats {
-                bytes_transferred,
-                blocks_transferred,
-                elapsed_us: start.elapsed().as_micros() as u64,
-              });
-            }
-          }
-          PKT_NACK => {
-            if let Ok(nack) = NackPkt::decode(&ctrl_buf[..n])
-              && nack.session_id == sid24
-            {
-              ctx.peer_addr = from;
-              deadline_us = now_us().saturating_add(timeout_us);
-              bytes_transferred += ctx.handle_nack(&nack, hi)?;
-            }
-          }
-          _ => {}
+        if let Some(resent) = resent_opt {
+          deadline_us = now_us().saturating_add(timeout_us);
+          bytes_transferred += resent;
         }
       }
       Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
