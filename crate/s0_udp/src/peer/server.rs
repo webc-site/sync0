@@ -11,7 +11,7 @@ use s0_cdc::{FLAG_DELETE, FLAG_PARTIAL, Manifest};
 use super::{
   PeerError, PeerId, ShareConfig, min_nonzero,
   pull::{derive_push_session_id, derive_session_id, read_frame, write_frame, write_two_frames},
-  register_iroh_endpoint,
+  register_iroh_endpoints, resolve_iroh_endpoints,
   sub::handle_incoming_sub_push,
 };
 use crate::{
@@ -73,7 +73,7 @@ pub(crate) struct ServerCtx {
   pub(crate) my_id: PeerId,
   pub(crate) my_region: Region,
   pub(crate) my_card: Vec<u8>,
-  pub(crate) my_ctrl_addr: SocketAddr,
+  pub(crate) my_ctrl_addrs: Vec<u8>,
   pub(crate) shares: Arc<RwLock<HashMap<[u8; 16], ShareState>>>,
   pub(crate) known_profiles: Arc<RwLock<HashMap<PeerId, SignedProfile>>>,
 }
@@ -99,13 +99,19 @@ pub(crate) fn build_swarm_peers(
   });
   for s in seeds {
     if s.root_hash == root_hash && s.endpoint_id != exclude_id {
+      let seed_addrs = resolve_iroh_endpoints(&s.endpoint_id);
+      let encoded_addrs = if seed_addrs.is_empty() {
+        encode_socket_addrs(&[s.ctrl_addr])
+      } else {
+        encode_socket_addrs(&seed_addrs)
+      };
       peers.push(SwarmPeer {
         endpoint_id: s.endpoint_id,
         region: s.region,
         weight_rate: min_nonzero(s.weight_rate, eff_rate),
         blk_lo: s.blk_lo,
         blk_hi: s.blk_hi,
-        peer_addrs: encode_socket_addrs(&[s.ctrl_addr]),
+        peer_addrs: encoded_addrs,
         profile_card: s.profile_card.clone(),
       });
     }
@@ -153,7 +159,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         flags: 0,
         eff_rate: 0,
         root_hash: [0u8; 16],
-        peer_addrs: encode_socket_addrs(&[ctx.my_ctrl_addr]),
+        peer_addrs: ctx.my_ctrl_addrs.clone(),
         profile_card: ctx.my_card.clone(),
         peers: Vec::new(),
         manifest: encode_share_summaries(&summaries)?,
@@ -191,9 +197,9 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
       Op::Stat => {
         if remote_id != [0u8; 32]
           && let Ok(addrs) = decode_socket_addrs(&req.peer_addrs)
-          && let Some(&first) = addrs.first()
+          && !addrs.is_empty()
         {
-          register_iroh_endpoint(remote_id, first);
+          register_iroh_endpoints(remote_id, &addrs);
         }
 
         let (root_hash, mf_bytes, total_blks) = if let Some((active_rh, ref sink_arc)) = active_sink
@@ -221,9 +227,8 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           (rh, bytes, blks)
         };
 
-        let my_ctrl_addrs = encode_socket_addrs(&[ctx.my_ctrl_addr]);
         let peers = build_swarm_peers(
-          (ctx.my_id, ctx.my_region, &my_ctrl_addrs, &ctx.my_card),
+          (ctx.my_id, ctx.my_region, &ctx.my_ctrl_addrs, &ctx.my_card),
           (access.eff_rate, total_blks, root_hash),
           &seeds_snapshot,
           remote_id,
@@ -234,7 +239,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           flags: 0,
           eff_rate: access.eff_rate,
           root_hash,
-          peer_addrs: my_ctrl_addrs,
+          peer_addrs: ctx.my_ctrl_addrs.clone(),
           profile_card: ctx.my_card.clone(),
           peers,
           manifest: mf_bytes,
@@ -245,7 +250,6 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
       Op::Pull => {
         let have_bits = read_frame(&mut stream)?;
 
-        // 若当前节点正在边下边传 (`active_sink`) 且请求的快照匹配，直接从暂存池无锁供应已校验块
         if let Some((active_rh, ref sink_arc)) = active_sink
           && req.paths.is_empty()
           && req.range.is_none_or(|(req_rh, ..)| req_rh == active_rh)
@@ -376,12 +380,11 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         let is_sub = matches!(req.op, Op::Sub | Op::GroupJoin);
         let peer_ctrl_addrs = decode_socket_addrs(&req.peer_addrs)?;
         let mut swarm_peers = Vec::new();
-        let my_ctrl_addrs = encode_socket_addrs(&[ctx.my_ctrl_addr]);
         if let Some(&peer_ctrl) = peer_ctrl_addrs.first()
           && (is_sub || req.range.is_some())
         {
           if remote_id != [0u8; 32] {
-            register_iroh_endpoint(remote_id, peer_ctrl);
+            register_iroh_endpoints(remote_id, &peer_ctrl_addrs);
           }
           let mut guard = ctx.shares.write();
           if let Some(st) = guard.get_mut(&req.share_id) {
@@ -410,7 +413,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
                 });
               }
               swarm_peers = build_swarm_peers(
-                (ctx.my_id, ctx.my_region, &my_ctrl_addrs, &ctx.my_card),
+                (ctx.my_id, ctx.my_region, &ctx.my_ctrl_addrs, &ctx.my_card),
                 (access.eff_rate, hi, rh),
                 &st.seeds,
                 remote_id,
@@ -423,7 +426,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           flags: 0,
           eff_rate: access.eff_rate,
           root_hash: req.range.map_or([0u8; 16], |(rh, ..)| rh),
-          peer_addrs: my_ctrl_addrs,
+          peer_addrs: ctx.my_ctrl_addrs.clone(),
           profile_card: ctx.my_card.clone(),
           peers: swarm_peers,
           manifest: Vec::new(),
@@ -448,9 +451,14 @@ fn serve_pull_udp(
   source: BlockSource<'_>,
 ) -> Result<(), PeerError> {
   let total = source.total_blocks();
-  let (blk_lo, blk_hi) = req
+  let (mut blk_lo, mut blk_hi) = req
     .range
     .map_or((0, total), |(_, lo, hi)| (lo.min(total), hi.min(total)));
+  if let Some((b_lo, b_hi)) = req.byte_range {
+    let (r_lo, r_hi) = source.manifest().locate_byte_range(b_lo, b_hi);
+    blk_lo = blk_lo.max(r_lo).min(total);
+    blk_hi = blk_hi.min(r_hi).min(total);
+  }
   let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
   let resp = P2pResp {
     status: Status::Ok,
@@ -464,7 +472,7 @@ fn serve_pull_udp(
   };
   write_frame(stream, &resp.encode()?)?;
   if blk_lo < blk_hi
-    && let Ok(peer_udp) = decode_socket_addrs(&req.peer_addrs)
+    && let Ok(peer_udp) = punch_udp(&udp_sock, &req.peer_addrs, 0)
     && let Some(&first_peer) = peer_udp.first()
   {
     let cli_port = first_peer.port();

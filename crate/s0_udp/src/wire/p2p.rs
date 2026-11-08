@@ -3,7 +3,9 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use s0_cdc::{Rd, WireError, Wr};
 
 use crate::{
-  consts::{FLAG_RANGE, FLAG_RW, Op, P2P_MAGIC, PROTO_VERSION, Perm, SUB_MAGIC, Status},
+  consts::{
+    FLAG_BYTE_RANGE, FLAG_RANGE, FLAG_RW, Op, P2P_MAGIC, PROTO_VERSION, Perm, SUB_MAGIC, Status,
+  },
   region::Region,
 };
 
@@ -136,11 +138,12 @@ pub struct P2pReq {
   pub profile_card: Vec<u8>,
   pub range: Option<([u8; 16], u32, u32)>,
   pub token: Option<[u8; 16]>,
+  pub byte_range: Option<(u64, u64)>,
 }
 
 impl P2pReq {
   pub fn encode(&self) -> Result<Vec<u8>, WireError> {
-    let mut out = Vec::with_capacity(128 + self.paths.len() * 16);
+    let mut out = Vec::with_capacity(144 + self.paths.len() * 16);
     let mut w = Wr::new(&mut out);
     w.u32(P2P_MAGIC);
     w.u8(PROTO_VERSION);
@@ -155,6 +158,11 @@ impl P2pReq {
       flags |= FLAG_RW;
     } else {
       flags &= !FLAG_RW;
+    }
+    if self.byte_range.is_some() {
+      flags |= FLAG_BYTE_RANGE;
+    } else {
+      flags &= !FLAG_BYTE_RANGE;
     }
     w.u8(flags);
     w.u8(0);
@@ -173,6 +181,10 @@ impl P2pReq {
     }
     if let Some(tok) = self.token {
       w.bytes(&tok);
+    }
+    if let Some((b_lo, b_hi)) = self.byte_range {
+      w.u64(b_lo);
+      w.u64(b_hi);
     }
     Ok(out)
   }
@@ -214,6 +226,11 @@ impl P2pReq {
     } else {
       None
     };
+    let byte_range = if flags & FLAG_BYTE_RANGE != 0 {
+      Some((r.u64()?, r.u64()?))
+    } else {
+      None
+    };
     Ok(Self {
       op,
       flags,
@@ -224,6 +241,7 @@ impl P2pReq {
       profile_card,
       range,
       token,
+      byte_range,
     })
   }
 }

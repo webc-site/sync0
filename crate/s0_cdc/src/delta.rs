@@ -217,7 +217,7 @@ fn match_chunks_into(
 }
 
 /// 接收端同名基准文件高速匹配：
-/// 1) 先按发送端已知切点 `(c.offset, c.len)` 顺序读取 `basis_file` 并做 SIMD BLAKE3 原位比对；
+/// 1) 先按发送端已知切点 `(c.offset, c.len)` 顺序读取 `basis_file` 并做 SIMD `gxhash128` 原位比对；
 /// 2) 一旦在 `chunks[idx]` 遇到首个失配块，将已验证的前缀签名直接记入 `basis`，仅对剩余后缀执行 FastCDC 滚动分块。
 pub fn match_basis_file(
   chunks: &[ChunkSig],
@@ -275,6 +275,18 @@ pub fn match_basis_file(
   }
   let scan_from = chunks[mismatch_idx].offset;
   basis.insert_file_from_with_buf(0, basis_file, scan_from, basis_size, cfg, buf)?;
+  for sig in &chunks[mismatch_idx..] {
+    if basis.get(&sig.hash, sig.len).is_none() {
+      let clen = sig.len as usize;
+      let end_off = sig.offset + u64::from(sig.len);
+      if end_off <= basis_size && clen <= buf.len() {
+        basis_file.read_exact_at_pos(&mut buf[..clen], sig.offset)?;
+        if hash128(&buf[..clen]) == sig.hash {
+          basis.insert_sig(0, sig);
+        }
+      }
+    }
+  }
   match_chunks_into(
     &chunks[mismatch_idx..],
     basis,

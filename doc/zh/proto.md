@@ -19,7 +19,7 @@
 
 | 数值 | 枚举名 | 语义 |
 | :--- | :--- | :--- |
-| `1` | `Op::Pull` | 拉取整个分享组、多选文件/目录集合或指定块区间 `[blk_lo, blk_hi)` |
+| `1` | `Op::Pull` | 拉取整个分享组、多选文件/目录集合、指定块区间 `[blk_lo, blk_hi)` 或点播字节区间 `[byte_lo, byte_hi)` |
 | `2` | `Op::Push` | 向拥有写权限的对等节点上传文件、目录或多选路径集合（服务端校验 `Perm` 与该组员允许上传的路径前缀 `write_prefixes`） |
 | `3` | `Op::Stat` | 查询目标分享组 + 多选路径集合的 `Manifest`、`root_hash`、节点名片及可用 P2P Swarm 做种节点列表 |
 | `4` | `Op::Sub` | 长连接订阅分享组更新（全量 `paths = []` 或多选文件/目录列表 `paths`），同时注册为 P2P 分发做种节点 |
@@ -82,7 +82,7 @@
 +---------------------------------------------------------------+
 | magic: u32 = 0x32503053 ("S0P2")                              |
 | version: u8 = 2   | op: u8 (Op)   | flags: u8  | rsv: u8 = 0  |
-| share_id: [u8; 16] (目标分享组 ID = BLAKE3_128(group_name))   |
+| share_id: [u8; 16] (目标分享组 ID = gxhash128(group_name))    |
 | req_rate: u64 (请求方期望带宽上限 B/s，0 表示不限)            |
 | path_cnt: u15     | paths: [slice_u15; path_cnt]              |
 |                   | (0 个表示全量分享组；>=1 表示多选文件/目录)|
@@ -93,6 +93,8 @@
 |   blk_lo: u32     | blk_hi: u32                               |
 | [当 flags & FLAG_RW != 0 时附加]:                             |
 |   token: [u8; 16]                                             |
+| [当 flags & FLAG_BYTE_RANGE != 0 时附加]:                     |
+|   byte_lo: u64    | byte_hi: u64 (u64::MAX 表示 byte_lo..EOF) |
 +---------------------------------------------------------------+
 ```
 
@@ -102,7 +104,7 @@
 | magic: u32 = 0x32503053 ("S0P2")                              |
 | status: u8 (Status) | flags: u8   | rsv: u16 = 0              |
 | eff_rate: u64 (协商生效的带宽上限 B/s)                        |
-| root_hash: [u8; 16] (当前 Manifest 的 128-bit BLAKE3 根摘要)  |
+| root_hash: [u8; 16] (当前 Manifest 的 128-bit gxhash128 摘要) |
 | addrs_len: u15      | peer_addrs: [u8; addrs_len]             |
 | card_len: u15       | profile_card: [u8; card_len]            |
 | peer_cnt: u15       | peers: [SwarmPeer; peer_cnt]            |

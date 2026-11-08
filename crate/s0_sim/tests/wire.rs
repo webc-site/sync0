@@ -62,6 +62,7 @@ fn test_data_hdr_and_p2p_frames_roundtrip() -> Void {
     profile_card: vec![1, 2, 3],
     range: Some(([9u8; 16], 10, 50)),
     token: Some([0xAA; 16]),
+    byte_range: Some((131_072, 524_288)),
   };
   let req_bytes = req.encode()?;
   let dec_req = P2pReq::decode(&req_bytes)?;
@@ -69,6 +70,7 @@ fn test_data_hdr_and_p2p_frames_roundtrip() -> Void {
   assert_eq!(dec_req.paths, vec!["docs/arch".to_owned()]);
   assert_eq!(dec_req.range, Some(([9u8; 16], 10, 50)));
   assert_eq!(dec_req.token, Some([0xAA; 16]));
+  assert_eq!(dec_req.byte_range, Some((131_072, 524_288)));
 
   let resp = P2pResp {
     status: Status::Ok,

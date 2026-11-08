@@ -256,7 +256,10 @@ impl Receiver {
         }
         if slot.cnt != h.cnt {
           if allow_tunnel && (pkt_step == TUNNEL_PKT || usize::from(h.cnt) > max_default_cnt) {
-            slot.reset(blk, h.cnt, h.is_zstd(), pkt_step as u16);
+            slot.reset(blk, h.cnt, h.is_zstd(), TUNNEL_PKT as u16);
+          } else if allow_tunnel && slot.pkt == TUNNEL_PKT as u16 && h.cnt < slot.cnt {
+            self.stats.dup += 1;
+            return Ok(Outcome::Duplicate);
           } else {
             return Err(UdpError::Corrupt);
           }
@@ -271,6 +274,9 @@ impl Receiver {
             }
             self.buf.copy_within(old_off..old_off + last_len, new_off);
             slot.pkt = pkt_step as u16;
+          } else if allow_tunnel && slot.pkt == TUNNEL_PKT as u16 && pkt_step > TUNNEL_PKT {
+            self.stats.dup += 1;
+            return Ok(Outcome::Duplicate);
           } else {
             return Err(UdpError::Corrupt);
           }

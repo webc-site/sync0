@@ -18,6 +18,9 @@ use super::{
 pub const IGNORE_FILE: &str = ".sync.ignore";
 const TMP_GLOB: &str = "*.s0tmp";
 const PART_GLOB: &str = "*.s0part";
+const STAGE_PREFIX: &str = ".s0_stage.";
+const STAGE_GLOB: &str = ".s0_stage.*";
+const PACK_TMP: &str = ".s0_pack.tmp";
 
 /// 扫描出的普通文件条目
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -79,6 +82,8 @@ fn default_builder(root: &Path) -> Result<GitignoreBuilder, FsError> {
   b.add_line(None, IGNORE_FILE)?;
   b.add_line(None, TMP_GLOB)?;
   b.add_line(None, PART_GLOB)?;
+  b.add_line(None, STAGE_GLOB)?;
+  b.add_line(None, PACK_TMP)?;
   Ok(b)
 }
 
@@ -86,6 +91,8 @@ pub fn is_staging(path: &Path) -> bool {
   path.file_name().is_some_and(|n| {
     let b = n.as_encoded_bytes();
     b == IGNORE_FILE.as_bytes()
+      || b == PACK_TMP.as_bytes()
+      || b.starts_with(STAGE_PREFIX.as_bytes())
       || b.ends_with(TMP_EXT.as_bytes())
       || b.ends_with(PART_EXT.as_bytes())
   })
