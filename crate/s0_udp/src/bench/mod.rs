@@ -14,9 +14,9 @@ use std::net::{SocketAddr, UdpSocket};
 pub use probe::{
   handle_probe, handle_probe_observed, make_probe, parse_probe_ack, parse_probe_ack_observed,
 };
-pub use rx::{recv, recv_on_sock, recv_on_sock_opt, recv_opt};
+pub use rx::{recv, recv_on_sock_opt, recv_opt};
 pub use stats::Stats;
-pub use tx::{send, send_changes, send_files, send_on_sock_opt, send_opt};
+pub use tx::{send, send_changes, send_on_sock_opt, send_opt};
 
 use crate::{UdpError, bind_std_udp};
 pub(super) use crate::{

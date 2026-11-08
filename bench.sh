@@ -9,9 +9,10 @@
 # 对比：sync0 单点直传 (send/recv) / sync0 多源 P2P (c1 + s1 双源做种, n1 pull) / rsync -az
 # 仅 c1 -> n1，全部使用 /tmp，数据只在首次测试时下载并缓存。
 #
-# 传输路径：三个模式统一走 Tailscale 直连地址（100.x）。原因是机房安全组只放行
-# SSH 等少数 TCP 端口，P2P 控制面需要任意 TCP 端口；Tailscale 是同一物理链路上的
-# WireGuard 直连（tailscale ping 显示 via [2a0a:...]:41641，非 DERP 中继）。
+# 传输路径：
+#   sp / rsync  公网 IPv6 直连（生产环境里 rsync 走 22 端口、sync0 直传可用 UDP）
+#   p2p         Tailscale 直连（100.x）；机房安全组只放行 SSH 等少数 TCP 端口，
+#               P2P 控制面需要额外 TCP 端口，只能借 Tailscale 直连（非 DERP 中继）
 # 同时打印公网 IPv6 ICMP RTT 与 Tailscale RTT 供对照。
 #
 # 用法：
@@ -189,12 +190,12 @@ run_sp() {
   local src="$1" dst="$2" kind="$3"
   remote_prepare_out ssh_n1 "$dst" "$kind"
   ssh_run ssh_n1 <<EOS
-nohup /tmp/sync0 bench-recv -q '0.0.0.0:$SP_PORT' "$dst" >/tmp/s0bench/recv.log 2>&1 </dev/null &
+nohup /tmp/sync0 bench-recv -q '[::]:$SP_PORT' "$dst" >/tmp/s0bench/recv.log 2>&1 </dev/null &
 sleep 0.5
 EOS
   local out
   out=$(ssh_run ssh_c1 <<EOS
-/tmp/sync0 bench-send -q --delete "$src" "$N1_TS:$SP_PORT" | tail -n 1
+/tmp/sync0 bench-send -q --delete "$src" "[$N1]:$SP_PORT" | tail -n 1
 EOS
 )
   ssh_run ssh_n1 <<'EOS'
@@ -270,11 +271,11 @@ run_rsync() {
   remote_prepare_out ssh_n1 "$dst" "$kind"
   if [[ "$kind" == "dir" ]]; then
     src_arg="$src/"
-    dst_arg="root@$N1_TS:$dst/"
+    dst_arg="root@[$N1]:$dst/"
     del="--delete"
   else
     src_arg="$src"
-    dst_arg="root@$N1_TS:$dst"
+    dst_arg="root@[$N1]:$dst"
     del=""
   fi
   ssh_run ssh_c1 <<EOS

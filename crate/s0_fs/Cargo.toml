@@ -6,10 +6,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-compio = { version = "0.19.2", features = ["runtime", "io", "net", "fs"] }
+compio = { version = "0.19.2", features = ["runtime", "io", "fs"] }
 gxhash = "3.5.0"
 ignore = "0.4.34"
 parking_lot = "0.13.0"
 s0_cdc = { version = "0.1.0", path = "../s0_cdc" }
-s0_wire = { version = "0.1.0", path = "../s0_wire" }
 thiserror = "2.0.21"

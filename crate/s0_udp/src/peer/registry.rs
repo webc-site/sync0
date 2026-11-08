@@ -5,11 +5,11 @@ use std::{
   io::{Read, Seek, SeekFrom, Write},
   net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
   path::PathBuf,
-  slice::from_ref,
   sync::OnceLock,
 };
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use fastrand::u64 as rand_u64;
 use gxhash::HashMap;
 use parking_lot::RwLock;
 
@@ -46,21 +46,6 @@ pub fn register_iroh_endpoints(id: PeerId, addrs: &[SocketAddr]) {
   for &a in &dedup {
     let _ = write_reg_entry(&id, a);
   }
-}
-
-/// 注册 32 字节二进制 `PeerId` 的单个端点（向后兼容，同地址族覆盖更新、跨 IPv4/IPv6 地址族并存）
-pub fn register_iroh_endpoint(id: PeerId, addr: SocketAddr) {
-  {
-    let mut guard = global_iroh_routes().write();
-    let list = guard.entry(id).or_default();
-    list.retain(|a| a.is_ipv6() != addr.is_ipv6());
-    if addr.is_ipv6() {
-      list.insert(0, addr);
-    } else {
-      list.push(addr);
-    }
-  }
-  let _ = write_reg_entry(&id, addr);
 }
 
 /// 从 32 字节二进制 `PeerId` 解析全部可达控制面端点列表（IPv6 + IPv4 双栈候选）
@@ -232,7 +217,7 @@ impl KeyMode {
       Self::Ephemeral => {
         let mut seed = [0u8; 32];
         for chunk in seed.as_chunks_mut::<8>().0 {
-          chunk.copy_from_slice(&fastrand::u64(..).to_le_bytes());
+          chunk.copy_from_slice(&rand_u64(..).to_le_bytes());
         }
         Ok(SecretKey::from_bytes(&seed))
       }
@@ -267,11 +252,6 @@ impl KeyMode {
 #[inline]
 pub fn encode_id_b64(bytes: &PeerId) -> String {
   URL_SAFE_NO_PAD.encode(bytes)
-}
-
-/// 将 32 字节 `iroh` 公钥与二进制路由端点紧凑编码为单一 `base64url` 地址
-pub fn encode_iroh_b64(id: &PeerId, addr: SocketAddr) -> String {
-  encode_iroh_addrs_b64(id, from_ref(&addr))
 }
 
 /// 将 32 字节 `iroh` 公钥与多个双栈候选端点紧凑编码为单一 `base64url` 地址

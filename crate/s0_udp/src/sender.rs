@@ -6,9 +6,9 @@ use crate::{
 };
 
 /// 在途环最小容量
-pub const MIN_CAP: usize = 256;
+const MIN_CAP: usize = 256;
 /// 在途环最大容量（约 24 MiB）
-pub const MAX_CAP: usize = 1 << 20;
+const MAX_CAP: usize = 1 << 20;
 /// 单次 ACK 最多扫描的失序候选
 const LOSS_SCAN: usize = 2048;
 

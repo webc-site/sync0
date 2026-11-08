@@ -1,9 +1,11 @@
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_udp::region::Region;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]

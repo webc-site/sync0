@@ -19,7 +19,7 @@ pub fn rank_swarm_peers(local_region: Region, mut peers: Vec<SwarmPeer>) -> Vec<
 }
 
 #[inline]
-pub(crate) fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
+fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
   let prox = u128::from(local_region.proximity_score(peer.region));
   let bw = u128::from(if peer.weight_rate == 0 {
     let is_direct = decode_socket_addrs(&peer.peer_addrs)
@@ -32,15 +32,6 @@ pub(crate) fn peer_score(local_region: Region, peer: &SwarmPeer) -> u128 {
   });
   let span = u128::from(peer.blk_hi.saturating_sub(peer.blk_lo).max(1));
   prox * bw * span
-}
-
-/// 将总块数 `[0, total_blocks)` 按候选对等节点的可用区间与得分比例切分为不相交的条带区间 `[(peer_idx, blk_lo, blk_hi)]`
-pub fn plan_stripes(
-  local_region: Region,
-  peers: &[SwarmPeer],
-  total_blocks: u32,
-) -> Vec<(usize, u32, u32)> {
-  plan_stripes_weighted(local_region, peers, &vec![1u64; total_blocks as usize])
 }
 
 /// 按各块的真实字节权重 `block_weights` 与节点得分比例将 `[0, block_weights.len())` 切分为不相交的条带区间 `[(peer_idx, blk_lo, blk_hi)]`

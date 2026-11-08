@@ -1,5 +1,7 @@
 use core::str::from_utf8;
 
+use gxhash::gxhash128;
+
 use crate::{CdcConfig, CdcError, Rd, WireError, Wr, find_boundary};
 
 /// 内容寻址清单魔数 `"S0M2"`
@@ -12,7 +14,7 @@ pub const FLAG_PARTIAL: u8 = 1 << 1;
 /// 计算数据切片的 128-bit `gxhash128` 硬件 AES/SIMD 加速内容摘要
 #[inline]
 pub fn hash128(data: &[u8]) -> [u8; 16] {
-  gxhash::gxhash128(data, 0).to_le_bytes()
+  gxhash128(data, 0).to_le_bytes()
 }
 
 /// 单块内容寻址签名

@@ -1,5 +1,6 @@
-use std::{fmt, result};
+use std::{fmt, result::Result as StdResult};
 
+use mzstd::{ConfigError, DecodeError, EncodeError};
 use thiserror::Error;
 
 /// 压缩帧头错误编码（1 字节数值枚举，替代字符串胖指针）
@@ -24,13 +25,13 @@ impl fmt::Display for FrameError {
 #[derive(Error, Debug)]
 pub enum Error {
   #[error(transparent)]
-  Encode(#[from] mzstd::EncodeError),
+  Encode(#[from] EncodeError),
 
   #[error(transparent)]
-  Decode(#[from] mzstd::DecodeError),
+  Decode(#[from] DecodeError),
 
   #[error(transparent)]
-  Config(#[from] mzstd::ConfigError),
+  Config(#[from] ConfigError),
 
   #[error("帧格式非法: {0}")]
   Frame(FrameError),
@@ -39,4 +40,4 @@ pub enum Error {
   Overflow,
 }
 
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T> = StdResult<T, Error>;

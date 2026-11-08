@@ -28,6 +28,5 @@ zmij = "1.0.23"
 [dev-dependencies]
 aok = "0.1.18"
 ctor = "1.0.13"
-fastrand = "2.5.0"
 log_init = "0.1.40"
 tempfile = "3.27.0"

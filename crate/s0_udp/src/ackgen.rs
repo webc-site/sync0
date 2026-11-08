@@ -1,10 +1,6 @@
 use s0_cc::ack_interval_us;
 
-use crate::{
-  UdpError,
-  consts::MAX_RANGES,
-  wire::{Ack, check_ranges},
-};
+use crate::{consts::MAX_RANGES, wire::Ack};
 
 /// 位图字数：8192 个包号，覆盖 300 Mbps × 66 ms 高 RTT 链路的历史
 const WORDS: usize = 128;
@@ -60,11 +56,6 @@ impl AckGen {
       Rec::New { hole } => self.immediate |= hole,
     }
     self.since_ack += 1;
-  }
-
-  /// 记录无需确认的包号（ACK / CLOSE）：只置位、不触发 ACK
-  pub fn on_quiet(&mut self, pn: u32) {
-    self.record(pn);
   }
 
   fn record(&mut self, pn: u32) -> Rec {
@@ -205,10 +196,4 @@ pub struct AckView<'a> {
   pub largest: u32,
   pub flag: u8,
   pub ranges: &'a [(u16, u16)],
-}
-
-impl AckView<'_> {
-  pub fn check(&self) -> Result<u32, UdpError> {
-    Ok(check_ranges(self.ranges.iter().copied())?)
-  }
 }

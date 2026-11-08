@@ -3,16 +3,16 @@ use std::fs::File;
 use gxhash::{HashMap, HashMapExt};
 
 use crate::{
-  CdcConfig, CdcError, ChunkSig, Chunks, FileAt, Hash128, file_io::IO_BUF_LEN,
+  CdcConfig, CdcError, ChunkSig, FileAt, Hash128, file_io::IO_BUF_LEN,
   for_each_file_chunk_from_with_buf, get_bit_usize, hash128, set_bit_usize,
 };
 
 /// 基准池（Basis）中某个已存在 CDC 块的位置
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct BasisLoc {
-  pub file_idx: u32,
-  pub off: u64,
-  pub len: u32,
+struct BasisLoc {
+  file_idx: u32,
+  off: u64,
+  len: u32,
 }
 
 /// 接收端已存在文件的 CDC 块索引表（O(1) `gxhash` 查找）
@@ -50,34 +50,12 @@ impl BasisIndex {
   }
 
   #[inline]
-  pub fn insert_sig(&mut self, file_idx: u32, sig: &ChunkSig) {
+  fn insert_sig(&mut self, file_idx: u32, sig: &ChunkSig) {
     self.map.entry(sig.hash).or_insert(BasisLoc {
       file_idx,
       off: sig.offset,
       len: sig.len,
     });
-  }
-
-  pub fn insert_slice(&mut self, file_idx: u32, data: &[u8], cfg: CdcConfig) {
-    for c in Chunks::new(data, cfg) {
-      let len = c.data.len() as u32;
-      self.map.entry(hash128(c.data)).or_insert(BasisLoc {
-        file_idx,
-        off: c.off,
-        len,
-      });
-    }
-  }
-
-  pub fn insert_file(
-    &mut self,
-    file_idx: u32,
-    file: &File,
-    size: u64,
-    cfg: CdcConfig,
-  ) -> Result<(), CdcError> {
-    let mut buf = Vec::new();
-    self.insert_file_with_buf(file_idx, file, size, cfg, &mut buf)
   }
 
   pub fn insert_file_with_buf(
@@ -91,7 +69,7 @@ impl BasisIndex {
     self.insert_file_from_with_buf(file_idx, file, 0, size, cfg, buf)
   }
 
-  pub fn insert_file_from_with_buf(
+  fn insert_file_from_with_buf(
     &mut self,
     file_idx: u32,
     file: &File,
@@ -106,7 +84,7 @@ impl BasisIndex {
   }
 
   #[inline]
-  pub fn get(&self, hash: &Hash128, len: u32) -> Option<BasisLoc> {
+  fn get(&self, hash: &Hash128, len: u32) -> Option<BasisLoc> {
     self.map.get(hash).copied().filter(|loc| loc.len == len)
   }
 }
@@ -135,6 +113,18 @@ pub struct FileDelta {
   pub data_spans: Vec<DataSpan>,
   pub delta_bytes: u64,
   pub reused_bytes: u64,
+}
+
+impl FileDelta {
+  /// 是否与大小为 `size` 的基准文件原位 100% 相同（零网络增量、单段从 0 完整覆盖）
+  #[inline]
+  pub const fn is_identical_to(&self, size: u64) -> bool {
+    self.delta_bytes == 0
+      && matches!(
+        self.copy_spans.as_slice(),
+        [s] if s.src_off == 0 && s.dst_off == 0 && s.len == size
+      )
+  }
 }
 
 #[inline]
@@ -331,18 +321,4 @@ pub fn for_each_missing_data_span(
   if let Some(last) = pending {
     on_span(last);
   }
-}
-
-/// 发送端：根据接收端回传的 `have_bits` 构建缺失块的连续发送区间 `DataSpan`
-pub fn plan_missing_spans(
-  chunks: &[ChunkSig],
-  have_bits: &[u8],
-  bit_cursor: &mut usize,
-  delta_cursor: &mut u64,
-) -> Vec<DataSpan> {
-  let mut spans = Vec::new();
-  for_each_missing_data_span(chunks, have_bits, bit_cursor, delta_cursor, |sp| {
-    spans.push(sp);
-  });
-  spans
 }

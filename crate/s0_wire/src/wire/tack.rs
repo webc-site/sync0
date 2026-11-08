@@ -4,7 +4,7 @@ use s0_cdc::{Rd, SliceWr, WireError};
 use strum::FromRepr;
 
 use crate::consts::{
-  ACK_DELAY_US, DATA_HLEN, MAX_CNT, MAX_RANGES, PAR, PHASE, R_SHIFT, RETX, SESSION_HLEN, ZSTD,
+  ACK_DELAY_US, DATA_HLEN, MAX_CNT, MAX_RANGES, PAR, PHASE, R_SHIFT, SESSION_HLEN, ZSTD,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, FromRepr)]
@@ -33,12 +33,12 @@ impl Kind {
   }
 
   #[inline]
-  pub const fn is_session(self) -> bool {
+  const fn is_session(self) -> bool {
     (self as u8) > 0x10
   }
 
   #[inline]
-  pub const fn expect(self, want: Self) -> Result<(), WireError> {
+  const fn expect(self, want: Self) -> Result<(), WireError> {
     if self as u8 == want as u8 {
       Ok(())
     } else {
@@ -154,11 +154,6 @@ impl StreamDataHeader {
   #[inline]
   pub const fn r(&self) -> u8 {
     self.flag >> R_SHIFT
-  }
-
-  #[inline]
-  pub const fn is_retx(&self) -> bool {
-    self.flag & RETX != 0
   }
 
   #[inline]
@@ -357,7 +352,7 @@ impl<'a> Ack<'a> {
   }
 }
 
-pub fn check_ranges(ranges: impl Iterator<Item = (u16, u16)>) -> Result<u32, WireError> {
+fn check_ranges(ranges: impl Iterator<Item = (u16, u16)>) -> Result<u32, WireError> {
   let mut reach = 0u32;
   for (i, (gap, len)) in ranges.enumerate() {
     if i == 0 && gap != 0 {

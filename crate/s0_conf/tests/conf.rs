@@ -1,11 +1,14 @@
 use std::fs;
 
 use aok::{OK, Void};
+use ctor::ctor;
+use log_init::init;
 use s0_conf::{GroupUri, parse_nt_groups, parse_rate, parse_rate_str};
+use tempfile::tempdir;
 
-#[ctor::ctor(unsafe)]
+#[ctor(unsafe)]
 fn _log_init() {
-  log_init::init();
+  init();
 }
 
 #[test]
@@ -33,7 +36,7 @@ fn test_parse_rate_units_and_decimals() -> Void {
 
 #[test]
 fn test_parse_nt_groups_with_unit_rates_and_users_dir() -> Void {
-  let cfg_dir = tempfile::tempdir()?;
+  let cfg_dir = tempdir()?;
   let users_dir = cfg_dir.path().join("users");
   fs::create_dir_all(&users_dir)?;
 

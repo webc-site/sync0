@@ -6,6 +6,8 @@ pub mod range;
 mod recv;
 mod sender;
 
+#[cfg(target_os = "linux")]
+use std::os::fd::AsRawFd;
 use std::{
   hint::spin_loop,
   io::{self, ErrorKind},
@@ -18,21 +20,23 @@ use std::{
 pub use ackgen::{AckGen, AckView};
 use bench::{make_probe, parse_probe_ack_observed};
 use codec::Error as CodecError;
+use fastrand::u16 as rand_u16;
 pub use fs::BlockSource;
 use fs::FsError;
 pub use progress::Progress;
 pub use range::{Pacer, RangeSpec, UdpStats, recv_range_udp, send_range_udp};
-pub use recv::{Config, MAX_SLOTS, Outcome, Receiver, RecvStats};
+pub use recv::{Config, Outcome, Receiver, RecvStats};
 use s0_cdc::{CdcError, WireError};
 pub use s0_codec as codec;
 pub use s0_fs::{compio_io, fs};
 pub use s0_wire::{consts, profile, region, wire};
-pub use sender::{AckStats, MIN_CAP, Sender, SentInfo};
+pub use sender::{AckStats, Sender, SentInfo};
 use socket2::{Domain, Protocol, Socket, Type};
+use thiserror::Error;
 use wire::{decode_socket_addrs, encode_punch, encode_punch_padded, encode_socket_addrs};
 
 /// 收发缓冲目标值（32 MiB，内核可能截断）
-pub const BUF_BYTES: usize = 32 * 1024 * 1024;
+const BUF_BYTES: usize = 32 * 1024 * 1024;
 /// 默认 IPv4 任意绑定地址 (`0.0.0.0:0`)
 pub const BIND_V4: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0));
 /// 默认 IPv6 任意绑定地址 (`[::]:0`)
@@ -72,7 +76,7 @@ pub fn send_udp(sock: &UdpSocket, data: &[u8], peer: SocketAddr) -> Result<(), U
   Err(UdpError::StreamTimeout)
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum UdpError {
   #[error("IO 错误: {0}")]
   Io(#[from] io::Error),
@@ -181,18 +185,6 @@ const fn is_ula_v6(ip: Ipv6Addr) -> bool {
   (ip.segments()[0] & 0xFE00) == 0xFC00
 }
 
-/// 判断 IPv4 地址是否为可直接路由的公网地址（排除 RFC1918 私网、回环、链路本地与 `100.64.0.0/10` CGNAT/Tailscale 隧道网段）
-#[inline]
-pub const fn is_global_v4(ip: Ipv4Addr) -> bool {
-  let oct = ip.octets();
-  !ip.is_private()
-    && !ip.is_loopback()
-    && !ip.is_link_local()
-    && !ip.is_unspecified()
-    && !ip.is_broadcast()
-    && !(oct[0] == 100 && (oct[1] & 0xC0) == 64)
-}
-
 /// 判断地址是否位于 Overlay 虚拟隧道网段（`100.64.0.0/10` 或 IPv6 ULA `fc00::/7`）
 #[inline]
 pub const fn is_tunnel_addr(addr: SocketAddr) -> bool {
@@ -236,7 +228,6 @@ pub(crate) fn is_emsgsize(err: &io::Error) -> bool {
 
 #[cfg(target_os = "linux")]
 fn linux_sock_mtu(sock: &UdpSocket) -> Option<usize> {
-  use std::os::fd::AsRawFd;
   unsafe extern "C" {
     fn getsockopt(sockfd: i32, level: i32, optname: i32, optval: *mut u8, optlen: *mut u32) -> i32;
   }
@@ -268,7 +259,7 @@ pub fn is_tunnel_path(sock: &UdpSocket, peer: SocketAddr) -> bool {
 }
 
 /// 根据控制流本地 IP 与已绑定 UDP 端口生成候选打洞地址列表编码
-pub fn encode_udp_addrs_for_ip(local_ip: IpAddr, local_port: u16) -> Vec<u8> {
+fn encode_udp_addrs_for_ip(local_ip: IpAddr, local_port: u16) -> Vec<u8> {
   let mut addrs = Vec::with_capacity(4);
   if !local_ip.is_unspecified() {
     addrs.push(SocketAddr::new(local_ip, local_port));
@@ -305,16 +296,6 @@ pub fn encode_udp_addrs_for_ip(local_ip: IpAddr, local_port: u16) -> Vec<u8> {
   encode_socket_addrs(&addrs)
 }
 
-/// 根据 TCP 控制端口推导确定性预绑定 UDP 端口（落在 `60000..61000` Mosh/QUIC 常见防火墙放行区间）
-#[inline]
-pub const fn default_udp_port(ctrl_port: u16) -> u16 {
-  if ctrl_port >= 60000 && ctrl_port < 61000 {
-    ctrl_port
-  } else {
-    60100 + (ctrl_port % 890)
-  }
-}
-
 /// 绑定本地临时 UDP 端口并返回 `(UdpSocket, 候选打洞地址编码)`
 pub fn bind_udp_ephemeral() -> Result<(UdpSocket, Vec<u8>), UdpError> {
   bind_udp_for_ip(IpAddr::V4(Ipv4Addr::LOCALHOST))
@@ -330,7 +311,7 @@ pub fn bind_udp_for_ip(local_ip: IpAddr) -> Result<(UdpSocket, Vec<u8>), UdpErro
   let mut sock_opt = None;
   if !local_ip.is_loopback() {
     for _ in 0..8 {
-      let port = fastrand::u16(60100..60990);
+      let port = rand_u16(60100..60990);
       if let Ok(s) = bind_std_udp(SocketAddr::new(unspec_ip, port), false) {
         sock_opt = Some(s);
         break;

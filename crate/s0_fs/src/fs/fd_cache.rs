@@ -1,4 +1,4 @@
-use std::{array, fs::File, io, sync::Arc};
+use std::{array::from_fn, fs::File, io, sync::Arc};
 
 use parking_lot::Mutex;
 
@@ -19,7 +19,7 @@ impl Default for FdCache {
 impl FdCache {
   pub fn new() -> Self {
     Self {
-      slots: array::from_fn(|_| Mutex::new(None)),
+      slots: from_fn(|_| Mutex::new(None)),
     }
   }
 

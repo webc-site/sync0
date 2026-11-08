@@ -1,5 +1,3 @@
-use std::mem::size_of;
-
 use gxhash::gxhash64;
 
 use crate::{
@@ -9,12 +7,12 @@ use crate::{
 };
 
 /// 槽位上限
-pub const MAX_SLOTS: usize = 65_536;
+const MAX_SLOTS: usize = 65_536;
 /// 单会话块池内存上限（1 GiB）
-pub const MAX_POOL: usize = 1024 * 1024 * 1024;
+const MAX_POOL: usize = 1024 * 1024 * 1024;
 const MIN_PKT: usize = 256;
 
-pub(crate) const fn check_slots(slots: usize, name: &'static str) -> Result<usize, UdpError> {
+const fn check_slots(slots: usize, name: &'static str) -> Result<usize, UdpError> {
   if slots == 0 || !slots.is_power_of_two() || slots > MAX_SLOTS {
     return Err(UdpError::Arg(name));
   }
@@ -54,7 +52,7 @@ impl Config {
     })
   }
 
-  pub const fn pool_bytes(&self) -> usize {
+  const fn pool_bytes(&self) -> usize {
     self.slots * self.block
   }
 
@@ -180,10 +178,6 @@ impl Receiver {
 
   pub const fn stats(&self) -> RecvStats {
     self.stats
-  }
-
-  pub const fn mem_bytes(&self) -> usize {
-    self.buf.len() + self.meta.len() * size_of::<Slot>()
   }
 
   /// 处理一个 DATA 包

@@ -69,12 +69,6 @@ impl Region {
     self as u16
   }
 
-  /// 所属地理大区编号（`0` 为未知，`1..=8` 为各大区）
-  #[inline]
-  pub const fn zone(self) -> u8 {
-    ((self as u16) / 100) as u8
-  }
-
   /// 城市三字简码（IATA 风格）
   pub const fn code(self) -> &'static str {
     match self {
@@ -156,7 +150,7 @@ impl Region {
   }
 
   /// 城市英文显示名
-  pub const fn name_en(self) -> &'static str {
+  const fn name_en(self) -> &'static str {
     match self {
       Self::Unknown => "Unknown",
       Self::Beijing => "Beijing",

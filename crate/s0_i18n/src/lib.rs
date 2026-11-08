@@ -1,8 +1,9 @@
 mod dict;
 
-use std::{env, str, sync::OnceLock};
+use std::{env::var, str::from_utf8, sync::OnceLock};
 
 pub use dict::{EN, I18n, LANG_CODES, ZH, by_code};
+use sys_locale::{get_locale, get_locales};
 
 static CURRENT: OnceLock<(&'static str, &'static I18n)> = OnceLock::new();
 
@@ -12,38 +13,27 @@ pub fn t() -> &'static I18n {
   CURRENT.get_or_init(detect).1
 }
 
-/// 获取当前生效的语言代码（覆盖 75 种语言，如 `"zh"`、`"zh-TW"`、`"en"`、`"ja"`、`"de"`、`"fr"`、`"ru"`、`"es"` 等）
-#[inline]
-pub fn lang_code() -> &'static str {
-  CURRENT.get_or_init(detect).0
-}
-
 /// 检测系统默认语言并返回 `(语言代码, &I18n)`，未匹配时回退至 `("en", &EN)`
 pub fn detect() -> (&'static str, &'static I18n) {
   for key in ["SYNC0_LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"] {
-    if let Ok(val) = env::var(key)
+    if let Ok(val) = var(key)
       && !val.trim().is_empty()
       && let Some(hit) = match_locale_list(&val)
     {
       return hit;
     }
   }
-  for sys in sys_locale::get_locales() {
+  for sys in get_locales() {
     if let Some(hit) = match_locale_list(&sys) {
       return hit;
     }
   }
-  if let Some(sys) = sys_locale::get_locale()
+  if let Some(sys) = get_locale()
     && let Some(hit) = match_locale_list(&sys)
   {
     return hit;
   }
   ("en", &EN)
-}
-
-/// 根据给定的 locale 字符串（支持全系统多语言格式如 `de_DE.UTF-8`、`fr-FR`、`ja_JP`、`zh-Hant-HK`、`ru_RU:en_US` 等）匹配语言，未匹配回退至 `("en", &EN)`
-pub fn resolve(locale_str: &str) -> (&'static str, &'static I18n) {
-  match_locale_list(locale_str).unwrap_or(("en", &EN))
 }
 
 fn match_locale_list(raw_list: &str) -> Option<(&'static str, &'static I18n)> {
@@ -78,7 +68,7 @@ fn match_single_locale(raw: &str) -> Option<(&'static str, &'static I18n)> {
       src.to_ascii_lowercase()
     };
   }
-  let norm = str::from_utf8(&buf[..len]).ok()?;
+  let norm = from_utf8(&buf[..len]).ok()?;
 
   // 1. 繁体中文区域与脚本别名归一为 zh-TW
   if matches!(

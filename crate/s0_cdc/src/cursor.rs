@@ -1,11 +1,13 @@
 use core::str::from_utf8;
 
+use thiserror::Error;
+
 /// `u15` 变长整数最大值 (`32767`)
-pub const U15_MAX: u16 = 0x7FFF;
+const U15_MAX: u16 = 0x7FFF;
 
 /// 紧凑 1 字节线协议错误类型
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum WireError {
   #[error("帧数据截断")]
   Truncated = 1,

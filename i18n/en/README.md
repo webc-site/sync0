@@ -14,35 +14,28 @@ Each machine is both a server and a client: any node can publish multiple file s
 
 ## Speed ​​comparison with rsync
 
-### Transoceanic network single source actual measurement (China → United States, delay 260 ms)
+### Transcontinental `c1 → n1` measurement (Linux kernel datasets, RTT 62~71 ms)
 
-| Transmission scenario | Data size | Model | `sync0` | `rsync -az` | Increase multiplier |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| 500 Small Files | 1.91 MB | Full synchronization | 18.84 Mbps | 5.32 Mbps | 3.5x |
-| 500 Small Files | 1.91 MB | Incremental synchronization | 27.15 Mbps | 3.83 Mbps | 7.1x |
-| Code and archive packages (`.tar`) | 10.0 MB | Full synchronization | 139.70 Mbps | 24.97 Mbps | 5.6x |
-| Code and archive packages (`.tar`) | 10.0 MB | Incremental synchronization | 83.38 Mbps | 26.02 Mbps | 3.2x |
-| Video file (`.mp4`) | 15.0 MB | Full synchronization | 54.06 Mbps | 27.04 Mbps | 2.0x |
-| Video file (`.mp4`) | 15.0 MB | Incremental synchronization | 216.83 Mbps | 21.51 Mbps | 10.1x |
+Link: `c1` (US, x86_64) → `n1` (Europe, aarch64), public IPv6 round trip `min 62 ms / avg 71 ms`. Single-point and `rsync` use native public IPv6; multi-source P2P uses a direct Tailscale path (the provider only allows a few TCP ports, so the P2P control plane cannot listen publicly; `64 ms`, not a DERP relay).
 
-### Transoceanic network P2P multi-node pull test (China → United States dual nodes, delay 260 ms)
+Datasets are downloaded from `linux-7.3.3.tar.xz` and cover three file profiles:
 
-Measured comparison of multi-source seed node striped concurrent pull:
+| Dataset | Size | Files | Profile |
+| :--- | ---: | ---: | :--- |
+| `linux-7.3.3.tar.xz` | 154.9 MiB | 1 | Incompressible (xz-compressed, entropy near the limit) |
+| `linux-7.3.3.tar` | 1.60 GiB | 1 | Compressible (source text and zero padding) |
+| `linux-7.3.3/` | 1.53 GiB | 95,979 | Massive small files (full kernel source tree) |
 
-| Transmission scenario | Data size | Single node seeding | Two-node P2P concurrent seeding | Increase multiplier |
-| :--- | :---: | :---: | :---: | :---: |
-| 500 Small Files | 1.97 MB | 5.28 Mbps | 7.87 Mbps | 1.5x |
-| Code and archive packages (`.tar`) | 30.0 MB | 56.35 Mbps | 83.17 Mbps | 1.5x |
-| Video file (`.mp4`) | 30.0 MB | 27.00 Mbps | 39.46 Mbps | 1.5x |
+| Dataset | `sync0` single node | `sync0` P2P dual seed | `rsync -az` | Single / rsync | P2P / rsync |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| `linux-7.3.3.tar.xz` | **78.88 Mbps**<br>16.5 s | **278.19 Mbps**<br>4.7 s | 32.00 Mbps<br>40.6 s | 2.46× | **8.69×** |
+| `linux-7.3.3.tar` | **315.65 Mbps**<br>43.6 s | **847.41 Mbps**<br>16.2 s | 122.46 Mbps<br>112.3 s | 2.58× | **6.92×** |
+| `linux-7.3.3/` | 140.82 Mbps<br>93.3 s | **535.58 Mbps**<br>24.5 s | 178.15 Mbps<br>73.7 s | 0.79× | **3.01×** |
 
-### Actual measurement of transcontinental high-speed dedicated line (Europe → North America, delay 86 ms)
-
-| Transmission scenario | Data size | `sync0` | `rsync` | Increase multiplier |
-| :--- | :---: | :---: | :---: | :---: |
-| 10,000 small files | 77.6 MB | 688 Mbps | 128 Mbps | 5.4x |
-| Code and archive packages (`.tar`) | 512 MB | 2111 Mbps | 438 Mbps | 4.8x |
-| Video file (`.mp4`) | 512 MB | 556 Mbps | 338 Mbps | 1.6x |
-| Incremental synchronization (modify 1% content) | 512 MB | 34133 Mbps | 2214 Mbps | 15.4x |
+- P2P seeds from both `c1` and `s1`, while `n1` pulls with `peers=2` and striped concurrency.
+- Everything is written to `/tmp`, each round is verified byte-for-byte with SHA-256, and all three nodes are cleaned up after the test.
+- For massive small files, single-point transfer is slower than `rsync` (`0.79×`) due to per-file scheduling and acknowledgement overhead; P2P aggregates the manifest and stripes across seeds, reaching `3.01×`.
+- Full methodology, raw data and reproduction steps: [`doc/zh/benchmark.md`](../../doc/zh/benchmark.md) (Chinese).
 
 ## Install
 

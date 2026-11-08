@@ -5,6 +5,7 @@ use ed25519_dalek::{
   Signature as Ed25519DalekSignature, Signer as _, SigningKey, Verifier as _, VerifyingKey,
 };
 use s0_cdc::{Rd, WireError, Wr};
+use thiserror::Error;
 
 use crate::{
   consts::{
@@ -58,7 +59,7 @@ impl PublicKey {
   }
 
   #[inline]
-  pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), ProfileError> {
+  fn verify(&self, msg: &[u8], sig: &Signature) -> Result<(), ProfileError> {
     self
       .0
       .verify(msg, &sig.0)
@@ -68,7 +69,7 @@ impl PublicKey {
 
 /// 64B Ed25519 签名封装
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Signature(ed25519_dalek::Signature);
+pub struct Signature(Ed25519DalekSignature);
 
 impl Signature {
   #[inline]
@@ -83,7 +84,7 @@ impl Signature {
 }
 
 /// 节点自签名名片错误定义
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ProfileError {
   #[error("线协议编解码错误: {0}")]
   Wire(#[from] WireError),
@@ -156,7 +157,7 @@ impl ProfileDraft {
     self.with_bio(motto)
   }
 
-  pub fn validate(&self) -> Result<(), ProfileError> {
+  fn validate(&self) -> Result<(), ProfileError> {
     let name_chars = self.name.chars().count();
     if name_chars > MAX_NAME_CHARS {
       return Err(ProfileError::NameTooLong(name_chars));

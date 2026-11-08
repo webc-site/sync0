@@ -4,12 +4,10 @@ use crate::math::clamp;
 pub const MIN_TACK_US: u64 = 2_000;
 /// TACK 最大周期（20 ms = 20000 µs）
 pub const MAX_TACK_US: u64 = 20_000;
-/// RTO 下限（5 ms）
-pub const MIN_RTO_US: u64 = 5_000;
 /// RTO 上限（2 s）
 pub const MAX_RTO_US: u64 = 2_000_000;
 /// RACK 乱序窗口上限（250 ms）
-pub const MAX_REO_US: u64 = 250_000;
+const MAX_REO_US: u64 = 250_000;
 
 /// RACK 重排窗口下限（1 ms）
 const MIN_REO_US: u64 = 1_000;
@@ -93,26 +91,6 @@ impl RttEstimator {
 
   pub const fn reo_wnd_us(&self) -> u64 {
     self.reo_us
-  }
-
-  const fn pto_us(&self) -> u64 {
-    self
-      .srtt_us
-      .saturating_add(self.rttvar_us.saturating_mul(4))
-  }
-
-  pub const fn rto_us(&self) -> u64 {
-    if !self.has_rtt {
-      return MAX_RTO_US;
-    }
-    clamp(self.pto_us(), MIN_RTO_US, MAX_RTO_US)
-  }
-
-  pub const fn tlp_us(&self) -> u64 {
-    if !self.has_rtt {
-      return MIN_RTO_US;
-    }
-    clamp(self.pto_us(), MIN_RTO_US, u64::MAX)
   }
 
   /// TACK 周期性 ACK 间隔，见 [`ack_interval_us`]

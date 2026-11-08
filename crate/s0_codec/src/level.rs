@@ -1,22 +1,13 @@
 use s0_wire::consts::ZSTD_DEFAULT_LEVEL;
 
 /// 候选压缩级别
-pub const LEVELS: [i32; 6] = [-7, -3, 1, 3, 6, 9];
+const LEVELS: [i32; 6] = [-7, -3, 1, 3, 6, 9];
 
 /// 级别决策结果
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LevelChoice {
   Off,
   Level(i32),
-}
-
-impl LevelChoice {
-  pub const fn level(self) -> Option<i32> {
-    match self {
-      Self::Off => None,
-      Self::Level(l) => Some(l),
-    }
-  }
 }
 
 /// EWMA 平滑系数
@@ -48,16 +39,12 @@ impl Policy {
     }
   }
 
-  pub fn set_threads(&mut self, threads: u32) {
-    self.threads = threads.max(1) as f64;
-  }
-
   pub fn set_peer_bps(&mut self, peer_bps: u64) {
     self.peer_bps = peer_bps as f64;
   }
 
   /// 估算级别 `L` 的等效吞吐（B/s）
-  pub fn estimate(&self, idx: usize, line_bps: u64) -> f64 {
+  fn estimate(&self, idx: usize, line_bps: u64) -> f64 {
     let mut t = self.s[idx] * self.threads;
     if line_bps > 0 {
       t = t.min(line_bps as f64 / self.q[idx]);

@@ -1,16 +1,14 @@
-use crate::CdcError;
-
 /// FastCDC 最小分块大小（16 KiB）
-pub const CDC_MIN_CHUNK: u32 = 16 * 1024;
+const CDC_MIN_CHUNK: u32 = 16 * 1024;
 /// FastCDC 平均分块大小（32 KiB）
-pub const CDC_AVG_CHUNK: u32 = 32 * 1024;
+const CDC_AVG_CHUNK: u32 = 32 * 1024;
 /// FastCDC 最大分块大小（64 KiB）
-pub const CDC_MAX_CHUNK: u32 = 64 * 1024;
+const CDC_MAX_CHUNK: u32 = 64 * 1024;
 
 const WINDOW_BYTES: usize = 64;
 
 /// 64 位 Gear 滚动哈希查找表
-pub const GEAR64: [u64; 256] = [
+const GEAR64: [u64; 256] = [
   0x6517_48f5_a15f_8222,
   0xd6ed_a276_c877_d8ea,
   0x6689_6ef9_591b_326b,
@@ -278,36 +276,14 @@ pub struct CdcConfig {
 }
 
 impl CdcConfig {
-  /// Google `cdc_rsync` 默认档位：4 KiB / 8 KiB / 32 KiB
-  pub const RSYNC: Self = Self {
-    min_size: 4 * 1024,
-    avg_size: 8 * 1024,
-    max_size: 32 * 1024,
-  };
-
   pub const DEFAULT: Self = Self {
     min_size: CDC_MIN_CHUNK as usize,
     avg_size: CDC_AVG_CHUNK as usize,
     max_size: CDC_MAX_CHUNK as usize,
   };
 
-  pub const fn new(
-    min_size: usize,
-    avg_size: usize,
-    max_size: usize,
-  ) -> Result<Self, crate::CdcError> {
-    if min_size == 0 || min_size > avg_size || avg_size > max_size {
-      return Err(CdcError::Config("0 < min <= avg <= max"));
-    }
-    Ok(Self {
-      min_size,
-      avg_size,
-      max_size,
-    })
-  }
-
   #[inline]
-  pub const fn threshold(&self) -> u64 {
+  const fn threshold(&self) -> u64 {
     let span = self
       .avg_size
       .saturating_sub(self.min_size)
@@ -357,47 +333,5 @@ pub fn find_boundary(data: &[u8], cfg: CdcConfig) -> usize {
     rc_len
   } else {
     len
-  }
-}
-
-/// 零拷贝切片分块项
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RawChunk<'a> {
-  pub off: u64,
-  pub data: &'a [u8],
-}
-
-/// 零拷贝切片 FastCDC 迭代器
-pub struct Chunks<'a> {
-  rest: &'a [u8],
-  off: u64,
-  cfg: CdcConfig,
-}
-
-impl<'a> Chunks<'a> {
-  #[inline]
-  pub const fn new(data: &'a [u8], cfg: CdcConfig) -> Self {
-    Self {
-      rest: data,
-      off: 0,
-      cfg,
-    }
-  }
-}
-
-impl<'a> Iterator for Chunks<'a> {
-  type Item = RawChunk<'a>;
-
-  #[inline]
-  fn next(&mut self) -> Option<Self::Item> {
-    if self.rest.is_empty() {
-      return None;
-    }
-    let cut = find_boundary(self.rest, self.cfg);
-    let (head, tail) = self.rest.split_at(cut);
-    let off = self.off;
-    self.off += cut as u64;
-    self.rest = tail;
-    Some(RawChunk { off, data: head })
   }
 }

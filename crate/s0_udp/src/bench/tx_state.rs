@@ -1,7 +1,7 @@
 use std::{
   collections::VecDeque,
   io::ErrorKind,
-  mem,
+  mem::take,
   net::{SocketAddr, UdpSocket},
 };
 
@@ -142,7 +142,7 @@ impl Tx<'_> {
           self.credit = self.credit.max(ack.credit);
           let rx_now = now_us();
           self.last_ack = rx_now;
-          let mut lost_pns = mem::take(&mut self.lost_pns);
+          let mut lost_pns = take(&mut self.lost_pns);
           lost_pns.clear();
           let src = &mut self.src;
           let st = self.sender.on_ack(
