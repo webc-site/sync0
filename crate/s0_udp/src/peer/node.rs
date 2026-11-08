@@ -347,6 +347,16 @@ impl PeerNode {
     share_name: &str,
     opts: &TransferOpts<'_>,
   ) -> Result<(P2pResp, Manifest, TcpStream), PeerError> {
+    let stream = self.connect_peer(&peer_id)?;
+    self.stat_on_stream(stream, share_name, opts)
+  }
+
+  pub(crate) fn stat_on_stream(
+    &self,
+    mut stream: TcpStream,
+    share_name: &str,
+    opts: &TransferOpts<'_>,
+  ) -> Result<(P2pResp, Manifest, TcpStream), PeerError> {
     let paths = opts.resolved_paths();
     let req = P2pReq {
       op: Op::Stat,
@@ -359,7 +369,6 @@ impl PeerNode {
       range: None,
       token: opts.token,
     };
-    let mut stream = self.connect_peer(&peer_id)?;
     write_frame(&mut stream, &req.encode()?)?;
     let resp_raw = read_frame(&mut stream)?;
     let resp = P2pResp::decode(&resp_raw)?;
