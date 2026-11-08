@@ -166,3 +166,11 @@ pub fn open_rw(path: &Path, truncate: bool, min_len: u64) -> io::Result<File> {
   }
   Ok(f)
 }
+
+/// 打开已存在的非空普通文件并返回 `(File, len)`
+#[inline]
+pub fn open_nonempty_file(path: &Path) -> Option<(File, u64)> {
+  let f = File::open(path).ok()?;
+  let m = f.metadata().ok()?;
+  (m.is_file() && m.len() > 0).then_some((f, m.len()))
+}

@@ -327,6 +327,19 @@ pub fn bind_udp_for_ip(local_ip: IpAddr) -> Result<(UdpSocket, Vec<u8>), UdpErro
   Ok((sock, encode_udp_addrs_for_ip(local_ip, local_port)))
 }
 
+/// 向给定目标地址列表发送一轮 UDP 打洞突发（每个地址 1 个 1400B DPLPMTUD 填充包 + 2 个 5B 保底打洞包）
+pub(crate) fn send_punch_burst(sock: &UdpSocket, addrs: &[SocketAddr], session_id: u32) {
+  let padded = encode_punch_padded(session_id);
+  let pkt = encode_punch(session_id);
+  for &addr in addrs {
+    if !is_tunnel_addr(addr) {
+      let _ = sock.send_to(&padded, addr);
+    }
+    let _ = sock.send_to(&pkt, addr);
+    let _ = sock.send_to(&pkt, addr);
+  }
+}
+
 /// 向对端所有候选地址发送打洞探测包（含 1 个 1400B DPLPMTUD 填充探测包与 2 个 5B 保底打洞包）并返回与本地套接字地址族匹配的候选地址列表
 pub fn punch_udp(
   sock: &UdpSocket,
@@ -346,14 +359,6 @@ pub fn punch_udp(
   if addrs.is_empty() {
     addrs = raw_addrs;
   }
-  let padded = encode_punch_padded(session_id);
-  let pkt = encode_punch(session_id);
-  for &addr in &addrs {
-    if !is_tunnel_addr(addr) {
-      let _ = sock.send_to(&padded, addr);
-    }
-    let _ = sock.send_to(&pkt, addr);
-    let _ = sock.send_to(&pkt, addr);
-  }
+  send_punch_burst(sock, &addrs, session_id);
   Ok(addrs)
 }

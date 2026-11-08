@@ -13,7 +13,7 @@ use crate::{
   Receiver, UdpError,
   codec::Codec,
   compio_io::flush_memory_slices_compio,
-  fs::{create_trunc, run_par_chunks, scan_files},
+  fs::{create_trunc, open_nonempty_file, run_par_chunks, scan_files},
 };
 
 /// 目录内跨文件去重扫描的基准总字节上限（128 MiB）
@@ -31,12 +31,6 @@ pub(super) struct TargetFile {
   pub(super) size: u64,
   pub(super) rem: u64,
   pub(super) created: bool,
-}
-
-pub(super) fn open_nonempty_basis(path: &Path) -> Option<(File, u64)> {
-  let f = File::open(path).ok()?;
-  let m = f.metadata().ok()?;
-  (m.is_file() && m.len() > 0).then_some((f, m.len()))
 }
 
 pub(super) fn check_single_chunk(
@@ -83,7 +77,7 @@ pub(super) fn precheck_single_chunks(
             continue;
           }
           let target = root_buf.join(&e.path);
-          let Some((basis_file, basis_size)) = open_nonempty_basis(target) else {
+          let Some((basis_file, basis_size)) = open_nonempty_file(target) else {
             v.push(SinglePrecheck::Fallback);
             continue;
           };

@@ -10,7 +10,7 @@ use s0_cdc::{BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, hash128, match_b
 use super::{
   FsError, copy_file_spans, create_trunc,
   fd_cache::FdCache,
-  open_rw,
+  open_nonempty_file, open_rw,
   pack::{SmallPack, UNPACKED_OFFSET},
   prune_dir, remove, sanitize_rel_path,
 };
@@ -65,11 +65,8 @@ impl SharedSink {
       let tmp_path = Self::tmp_path_for(&final_path);
       let mut basis_hit = None;
 
-      if root_existed
-        && let Ok(basis) = File::open(&final_path)
-        && let Ok(meta) = basis.metadata()
-      {
-        let (basis_len, mut bc) = (meta.len(), base_bit);
+      if root_existed && let Some((basis, basis_len)) = open_nonempty_file(&final_path) {
+        let mut bc = base_bit;
         let plan = match_basis_file(
           &e.chunks,
           (&basis, basis_len),
@@ -92,15 +89,11 @@ impl SharedSink {
       }
 
       let mut stage_reused = 0u64;
-      if root_existed
-        && let Ok(stage) = File::open(&tmp_path)
-        && let Ok(meta) = stage.metadata()
-        && meta.len() > 0
-      {
+      if root_existed && let Some((stage, stage_len)) = open_nonempty_file(&tmp_path) {
         let mut bc = base_bit;
         stage_reused = match_basis_file(
           &e.chunks,
-          (&stage, meta.len()),
+          (&stage, stage_len),
           CdcConfig::DEFAULT,
           (&mut basis_idx, &mut io_buf),
           &mut initial_have_bits,

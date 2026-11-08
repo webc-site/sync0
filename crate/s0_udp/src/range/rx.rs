@@ -17,7 +17,7 @@ use crate::{
     DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, PKT_PUNCH, ZSTD_DEFAULT_LEVEL,
   },
   fs::{FsError, SharedSink},
-  is_tunnel_addr, now_us,
+  is_tunnel_addr, now_us, send_punch_burst,
   wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch, encode_punch_padded},
 };
 
@@ -70,15 +70,9 @@ pub fn recv_range_udp(
   let (mut has_unacked_gap, mut idle_nacked, mut poison_strikes) = (false, false, 0u8);
   let (mut last_nack_us, mut last_rx_us) = (now_us(), now_us());
 
+  send_punch_burst(sock, peer_addrs, sid24);
   let padded_punch = encode_punch_padded(sid24);
   let punch_pkt = encode_punch(sid24);
-  for &addr in peer_addrs {
-    if !is_tunnel_addr(addr) {
-      let _ = sock.send_to(&padded_punch, addr);
-    }
-    let _ = sock.send_to(&punch_pkt, addr);
-    let _ = sock.send_to(&punch_pkt, addr);
-  }
 
   let timeout_us = spec.timeout.as_micros() as u64;
   let mut deadline_us = now_us().saturating_add(timeout_us);

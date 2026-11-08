@@ -214,7 +214,6 @@ pub(super) struct ManifestRx {
   pub(super) ack: Vec<u8>,
   pub(super) chunks: usize,
   pub(super) rem: usize,
-  pub(super) rx: usize,
 }
 
 impl ManifestRx {
@@ -249,7 +248,6 @@ impl ManifestRx {
       ack,
       chunks,
       rem: chunks,
-      rx: 0,
     })
   }
 
@@ -268,7 +266,6 @@ impl ManifestRx {
       *byte |= bit;
       self.data[off..off + want].copy_from_slice(&payload[..want]);
       self.rem -= 1;
-      self.rx += 1;
     }
   }
 }

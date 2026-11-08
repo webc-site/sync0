@@ -138,7 +138,6 @@ pub struct Receiver {
   buf: Box<[u8]>,
   meta: Box<[Slot]>,
   done_lo: u32,
-  end: u32,
   cur_pkt: usize,
   seed: i64,
   stats: RecvStats,
@@ -157,7 +156,6 @@ impl Receiver {
       buf,
       meta,
       done_lo: 0,
-      end: 0,
       cur_pkt: cfg.pkt,
       seed: seed as i64,
       stats: RecvStats::default(),
@@ -290,7 +288,6 @@ impl Receiver {
     if end_off > self.cfg.block {
       return Err(UdpError::Corrupt);
     }
-    self.end = self.end.max(blk + 1);
     if tail {
       slot.last = payload.len() as u32;
     }
