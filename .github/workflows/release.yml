@@ -41,9 +41,9 @@ jobs:
             builder: zigbuild
             bin_name: sync0
           - platform: linux-arm64-musl
-            os: ubuntu-24.04
+            os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-            builder: zigbuild
+            builder: musl
             bin_name: sync0
           # Android NDK (compio epoll polling)
           - platform: android-arm64
@@ -94,15 +94,10 @@ jobs:
             target: aarch64-pc-windows-msvc
             builder: cargo
             bin_name: sync0.exe
-          # FreeBSD & NetBSD (compio kqueue + POSIX AIO)
+          # FreeBSD (compio kqueue + POSIX AIO)
           - platform: freebsd-x64
             os: ubuntu-24.04
             target: x86_64-unknown-freebsd
-            builder: cross
-            bin_name: sync0
-          - platform: netbsd-x64
-            os: ubuntu-24.04
-            target: x86_64-unknown-netbsd
             builder: cross
             bin_name: sync0
     steps:
@@ -148,6 +143,10 @@ jobs:
           case "${{ matrix.builder }}" in
             zigbuild)
               cargo zigbuild --release --target "${{ matrix.target }}" -p sync0
+              ;;
+            musl)
+              sudo apt-get update && sudo apt-get install -y musl-tools
+              cargo build --release --target "${{ matrix.target }}" -p sync0
               ;;
             ndk)
               export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
