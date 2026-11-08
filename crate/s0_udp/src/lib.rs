@@ -31,7 +31,7 @@ pub use recv::{BLOCK, Config, MAX_SLOTS, Outcome, Receiver, RecvStats, SLOTS};
 use s0_cdc::{CdcError, WireError};
 pub use sender::{AckStats, MIN_CAP, Sender, SentInfo};
 use socket2::{Domain, Protocol, Socket, Type};
-use wire::{decode_socket_addrs, encode_punch, encode_socket_addrs};
+use wire::{decode_socket_addrs, encode_punch, encode_punch_padded, encode_socket_addrs};
 
 /// 收发缓冲目标值（32 MiB，内核可能截断）
 pub const BUF_BYTES: usize = 32 * 1024 * 1024;
@@ -173,6 +173,68 @@ pub const fn is_tunnel_addr(addr: SocketAddr) -> bool {
   }
 }
 
+/// 判断 IO 错误是否为报文超过路径 MTU (`EMSGSIZE` / `WSAEMSGSIZE`)
+#[inline]
+pub(crate) fn is_emsgsize(err: &io::Error) -> bool {
+  #[cfg(target_os = "linux")]
+  const EMSGSIZE_OS: i32 = 90;
+  #[cfg(any(
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd"
+  ))]
+  const EMSGSIZE_OS: i32 = 40;
+  #[cfg(target_os = "windows")]
+  const EMSGSIZE_OS: i32 = 10040;
+  #[cfg(not(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "windows"
+  )))]
+  const EMSGSIZE_OS: i32 = 90;
+
+  err.raw_os_error() == Some(EMSGSIZE_OS)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_sock_mtu(sock: &UdpSocket) -> Option<usize> {
+  use std::os::fd::AsRawFd;
+  unsafe extern "C" {
+    fn getsockopt(sockfd: i32, level: i32, optname: i32, optval: *mut u8, optlen: *mut u32) -> i32;
+  }
+  const IPPROTO_IP: i32 = 0;
+  const IP_MTU: i32 = 14;
+  const IPPROTO_IPV6: i32 = 41;
+  const IPV6_MTU: i32 = 24;
+
+  let fd = sock.as_raw_fd();
+  for (lvl, opt) in [(IPPROTO_IP, IP_MTU), (IPPROTO_IPV6, IPV6_MTU)] {
+    let mut mtu: i32 = 0;
+    let mut len: u32 = 4;
+    let rc = unsafe { getsockopt(fd, lvl, opt, (&raw mut mtu).cast::<u8>(), &raw mut len) };
+    if rc == 0 && mtu > 0 {
+      return Some(mtu as usize);
+    }
+  }
+  None
+}
+
+/// 综合对端/本地 Overlay 地址特征与内核套接字路径 MTU 判断是否应起步使用 1200B 隧道安全分片
+#[inline]
+pub fn is_tunnel_path(sock: &UdpSocket, peer: SocketAddr) -> bool {
+  #[cfg(target_os = "linux")]
+  if linux_sock_mtu(sock).is_some_and(|m| m < 1420) {
+    return true;
+  }
+  is_tunnel_addr(peer) || sock.local_addr().is_ok_and(is_tunnel_addr)
+}
+
 /// 根据控制流本地 IP 与已绑定 UDP 端口生成候选打洞地址列表编码
 pub fn encode_udp_addrs_for_ip(local_ip: IpAddr, local_port: u16) -> Vec<u8> {
   let mut addrs = Vec::with_capacity(4);
@@ -252,7 +314,7 @@ pub fn bind_udp_for_ip(local_ip: IpAddr) -> Result<(UdpSocket, Vec<u8>), UdpErro
   Ok((sock, encode_udp_addrs_for_ip(local_ip, local_port)))
 }
 
-/// 向对端所有候选地址发送打洞探测包并返回候选地址列表
+/// 向对端所有候选地址发送打洞探测包（含 1 个 1400B DPLPMTUD 填充探测包与 2 个 5B 保底打洞包）并返回候选地址列表
 pub fn punch_udp(
   sock: &UdpSocket,
   peer_addrs_raw: &[u8],
@@ -262,11 +324,14 @@ pub fn punch_udp(
   if addrs.is_empty() {
     return Err(UdpError::NoPeerAddr);
   }
+  let padded = encode_punch_padded(session_id);
   let pkt = encode_punch(session_id);
-  for _ in 0..2 {
-    for &addr in &addrs {
-      let _ = sock.send_to(&pkt, addr);
+  for &addr in &addrs {
+    if !is_tunnel_addr(addr) {
+      let _ = sock.send_to(&padded, addr);
     }
+    let _ = sock.send_to(&pkt, addr);
+    let _ = sock.send_to(&pkt, addr);
   }
   Ok(addrs)
 }

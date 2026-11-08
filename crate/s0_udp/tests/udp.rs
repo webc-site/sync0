@@ -398,3 +398,85 @@ fn test_small_file_superblock_and_pack_stream() -> Void {
   }
   OK
 }
+
+#[test]
+fn test_dplpmtud_adaptive_receiver_and_padded_punch() -> Void {
+  use s0_udp::{
+    BLOCK, Config, Outcome, Receiver,
+    consts::{DEFAULT_PKT, TUNNEL_PKT},
+    wire::{StreamDataHeader, decode_punch, encode_punch_padded},
+  };
+
+  // 1. 1400B DPLPMTUD 填充探测打洞包编解码验证
+  let padded = encode_punch_padded(0x00AB_CDEF);
+  assert_eq!(padded.len(), DEFAULT_PKT);
+  assert_eq!(decode_punch(&padded).unwrap(), 0x00AB_CDEF);
+
+  // 2. Receiver 动态适应 1400B -> 1200B 分片步长（含尾包乱序先到与中途降级重切分）
+  let mut rx = Receiver::new(Config::new(16, BLOCK, DEFAULT_PKT)?.with_zstd(), 0)?;
+  let mut raw_blk = vec![0u8; 25_000];
+  for (i, b) in raw_blk.iter_mut().enumerate() {
+    *b = ((i * 19 + 7) & 0xFF) as u8;
+  }
+
+  // 模拟发送端先按 1400B 发送了 idx=0，随后触发 MTU 降级改按 1200B 重新切分发送（且尾包先乱序到达）
+  let cnt_1400 = raw_blk.len().div_ceil(DEFAULT_PKT) as u8;
+  let hdr_old = StreamDataHeader {
+    flag: 0,
+    idx: 0,
+    cnt: cnt_1400,
+    sid: 1,
+    pn: 1,
+    blk: 0,
+    ts: 10,
+  };
+  assert_eq!(
+    rx.on_data(&hdr_old, &raw_blk[..DEFAULT_PKT])?,
+    Outcome::Stored
+  );
+
+  let cnt_1200 = raw_blk.len().div_ceil(TUNNEL_PKT) as u8;
+  let tail_idx = cnt_1200 - 1;
+  let tail_off = usize::from(tail_idx) * TUNNEL_PKT;
+  let hdr_tail = StreamDataHeader {
+    flag: 0,
+    idx: tail_idx,
+    cnt: cnt_1200,
+    sid: 1,
+    pn: 2,
+    blk: 0,
+    ts: 20,
+  };
+  assert_eq!(
+    rx.on_data(&hdr_tail, &raw_blk[tail_off..])?,
+    Outcome::Stored
+  );
+
+  for idx in 0..tail_idx {
+    let off = usize::from(idx) * TUNNEL_PKT;
+    let hdr = StreamDataHeader {
+      flag: 0,
+      idx,
+      cnt: cnt_1200,
+      sid: 1,
+      pn: 3 + u32::from(idx),
+      blk: 0,
+      ts: 30,
+    };
+    let out = rx.on_data(&hdr, &raw_blk[off..off + TUNNEL_PKT])?;
+    if idx + 1 == tail_idx {
+      assert!(matches!(
+        out,
+        Outcome::BlockReady {
+          blk: 0,
+          len: 25_000,
+          ..
+        }
+      ));
+    } else {
+      assert_eq!(out, Outcome::Stored);
+    }
+  }
+  assert_eq!(rx.data(0).unwrap(), raw_blk.as_slice());
+  OK
+}

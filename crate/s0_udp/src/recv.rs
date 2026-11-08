@@ -2,7 +2,11 @@ use std::mem::size_of;
 
 use gxhash::gxhash64;
 
-use crate::{UdpError, consts::MAX_CNT, wire::StreamDataHeader};
+use crate::{
+  UdpError,
+  consts::{DEFAULT_PKT, MAX_CNT, TUNNEL_PKT},
+  wire::StreamDataHeader,
+};
 
 /// 默认块大小：128 KiB
 pub const BLOCK: usize = 128 * 1024;
@@ -94,17 +98,19 @@ struct Slot {
   have: u128,
   cnt: u8,
   zstd: bool,
+  pkt: u16,
   last: u32,
   len: u32,
   state: State,
 }
 
 impl Slot {
-  fn reset(&mut self, blk: u32, cnt: u8, zstd: bool) {
+  fn reset(&mut self, blk: u32, cnt: u8, zstd: bool, pkt: u16) {
     *self = Self {
       blk,
       cnt,
       zstd,
+      pkt,
       state: State::Filling,
       ..Self::default()
     };
@@ -139,7 +145,7 @@ pub struct Receiver {
   meta: Box<[Slot]>,
   done_lo: u32,
   end: u32,
-  next: Option<(u32, usize)>,
+  cur_pkt: usize,
   seed: i64,
   stats: RecvStats,
 }
@@ -158,7 +164,7 @@ impl Receiver {
       meta,
       done_lo: 0,
       end: 0,
-      next: None,
+      cur_pkt: cfg.pkt,
       seed: seed as i64,
       stats: RecvStats::default(),
     })
@@ -204,49 +210,95 @@ impl Receiver {
       self.stats.no_credit += 1;
       return Ok(Outcome::NoCredit);
     }
-    let pkt = self.pkt_of(blk);
-    if payload.is_empty() || payload.len() > pkt {
-      return Err(UdpError::Corrupt);
-    }
-
-    let idx = usize::from(h.idx);
-    let pkt_off = idx * pkt;
-    let end_off = pkt_off + payload.len();
-    if end_off > self.cfg.block {
+    if payload.is_empty() {
       return Err(UdpError::Corrupt);
     }
     let tail = h.idx + 1 == h.cnt;
-    if !tail && payload.len() != pkt {
+    let allow_tunnel = self.cfg.pkt == DEFAULT_PKT;
+    let max_default_cnt = self.cfg.block.div_ceil(self.cfg.pkt);
+    let i = blk as usize & self.cfg.slots_mask();
+    let start = i * self.cfg.block;
+
+    let pkt_step = if !tail {
+      if payload.len() != self.cfg.pkt && !(allow_tunnel && payload.len() == TUNNEL_PKT) {
+        return Err(UdpError::Corrupt);
+      }
+      self.cur_pkt = payload.len();
+      payload.len()
+    } else if allow_tunnel && usize::from(h.cnt) > max_default_cnt {
+      self.cur_pkt = TUNNEL_PKT;
+      TUNNEL_PKT
+    } else {
+      let existing = &self.meta[i];
+      if matches!(existing.state, State::Filling | State::Ready) && existing.blk == blk {
+        if existing.cnt == h.cnt && existing.pkt > 0 {
+          usize::from(existing.pkt)
+        } else if allow_tunnel && h.cnt > existing.cnt {
+          self.cur_pkt = TUNNEL_PKT;
+          TUNNEL_PKT
+        } else {
+          self.cur_pkt
+        }
+      } else {
+        self.cur_pkt
+      }
+    };
+
+    if payload.len() > pkt_step.max(if h.cnt == 1 { self.cfg.pkt } else { pkt_step }) {
       return Err(UdpError::Corrupt);
     }
 
-    let i = blk as usize & self.cfg.slots_mask();
     let slot = &mut self.meta[i];
     match slot.state {
       State::Filling | State::Ready => {
-        if slot.blk != blk {
+        if slot.blk != blk || slot.zstd != h.is_zstd() {
           return Err(UdpError::Corrupt);
+        }
+        if slot.cnt != h.cnt {
+          if allow_tunnel && (pkt_step == TUNNEL_PKT || usize::from(h.cnt) > max_default_cnt) {
+            slot.reset(blk, h.cnt, h.is_zstd(), pkt_step as u16);
+          } else {
+            return Err(UdpError::Corrupt);
+          }
+        } else if !tail && slot.pkt != pkt_step as u16 {
+          let tail_bit = 1u128 << (h.cnt - 1);
+          if allow_tunnel && slot.have == tail_bit {
+            let old_off = start + usize::from(h.cnt - 1) * usize::from(slot.pkt);
+            let new_off = start + usize::from(h.cnt - 1) * pkt_step;
+            let last_len = slot.last as usize;
+            if new_off + last_len > start + self.cfg.block {
+              return Err(UdpError::Corrupt);
+            }
+            self.buf.copy_within(old_off..old_off + last_len, new_off);
+            slot.pkt = pkt_step as u16;
+          } else {
+            return Err(UdpError::Corrupt);
+          }
         }
         if slot.have >> h.idx & 1 == 1 {
           self.stats.dup += 1;
           return Ok(Outcome::Duplicate);
-        }
-        if slot.cnt != h.cnt || slot.zstd != h.is_zstd() {
-          return Err(UdpError::Corrupt);
         }
       }
       State::Done if slot.blk == blk => {
         self.stats.dup += 1;
         return Ok(Outcome::Duplicate);
       }
-      _ => slot.reset(blk, h.cnt, h.is_zstd()),
+      _ => slot.reset(blk, h.cnt, h.is_zstd(), pkt_step as u16),
+    }
+
+    let eff_pkt = usize::from(slot.pkt);
+    let idx = usize::from(h.idx);
+    let pkt_off = idx * eff_pkt;
+    let end_off = pkt_off + payload.len();
+    if end_off > self.cfg.block {
+      return Err(UdpError::Corrupt);
     }
     self.end = self.end.max(blk + 1);
     if tail {
       slot.last = payload.len() as u32;
     }
 
-    let start = i * self.cfg.block;
     let base = start + pkt_off;
     self.buf[base..base + payload.len()].copy_from_slice(payload);
     slot.have |= 1u128 << h.idx;
@@ -257,7 +309,7 @@ impl Receiver {
       return Ok(Outcome::Stored);
     }
 
-    let len = (usize::from(h.cnt) - 1) * pkt + slot.last as usize;
+    let len = (usize::from(h.cnt) - 1) * eff_pkt + slot.last as usize;
     slot.len = len as u32;
     slot.state = State::Ready;
     self.stats.blocks += 1;
@@ -280,14 +332,6 @@ impl Receiver {
   pub fn partial(&self, blk: u32) -> Option<u128> {
     let slot = self.meta[blk as usize & self.cfg.slots_mask()];
     (slot.blk == blk && slot.state == State::Filling).then_some(slot.have)
-  }
-
-  #[inline]
-  const fn pkt_of(&self, blk: u32) -> usize {
-    match self.next {
-      Some((b0, p)) if blk >= b0 => p,
-      _ => self.cfg.pkt,
-    }
   }
 
   pub fn release(&mut self, blk: u32) -> Result<(), UdpError> {

@@ -1,6 +1,6 @@
 use s0_cdc::{Rd, WireError, Wr};
 
-use crate::consts::{DATA_HDR_LEN, PKT_ACK, PKT_NACK, PKT_PUNCH};
+use crate::consts::{DATA_HDR_LEN, DEFAULT_PKT, PKT_ACK, PKT_NACK, PKT_PUNCH};
 
 /// 20 字节紧凑原生 UDP 数据包头
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,7 +180,16 @@ pub fn encode_punch(session_id: u32) -> [u8; 5] {
   out
 }
 
-/// 解码 5 字节 UDP 打洞探测包并返回 24-bit `session_id`
+/// 构造填充至 `DEFAULT_PKT` (1400 B) 的 Path MTU 探测打洞包（RFC 8899 DPLPMTUD）
+#[inline]
+pub fn encode_punch_padded(session_id: u32) -> [u8; DEFAULT_PKT] {
+  let mut out = [0u8; DEFAULT_PKT];
+  out[0] = PKT_PUNCH;
+  out[1..5].copy_from_slice(&(session_id & 0x00FF_FFFF).to_le_bytes());
+  out
+}
+
+/// 解码 UDP 打洞探测包（兼容 5B 保底包与 1400B PMTUD 填充探测包）并返回 24-bit `session_id`
 #[inline]
 pub fn decode_punch(buf: &[u8]) -> Result<u32, WireError> {
   if buf.len() < 5 {

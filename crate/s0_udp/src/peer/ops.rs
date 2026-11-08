@@ -16,8 +16,8 @@ use s0_cdc::{FLAG_DELETE, FLAG_PARTIAL};
 use super::{
   PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
   pull::{
-    RangePullJob, derive_push_session_id, execute_striped_pull, is_have_all_ones_frame, read_frame,
-    write_frame, write_two_frames,
+    RangePullJob, connect_ctrl_tcp, derive_push_session_id, execute_striped_pull,
+    is_have_all_ones_frame, read_frame, write_frame, write_two_frames,
   },
   register_iroh_endpoint, resolve_iroh_endpoint,
   server::ShareState,
@@ -126,6 +126,7 @@ impl PeerNode {
         };
         if let Ok((resp, mf, stream)) = res {
           reused_conns.lock().insert(pid, stream);
+          rtt_map.entry(pid).or_insert(50_000);
           origin_pid = pid;
           stat_ok = Some((resp, mf));
           break;
@@ -188,11 +189,13 @@ impl PeerNode {
             .iter()
             .map(|&pid| {
               s.spawn(move || {
+                let addr = resolve_iroh_endpoint(&pid)?;
                 let t0 = Instant::now();
-                self
-                  .connect_peer(&pid)
-                  .ok()
-                  .map(|stream| (pid, (t0.elapsed().as_micros() as u64).max(1), stream))
+                let stream = TcpStream::connect_timeout(&addr, Duration::from_millis(600)).ok()?;
+                let _ = stream.set_nodelay(true);
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+                Some((pid, (t0.elapsed().as_micros() as u64).max(1), stream))
               })
             })
             .collect();
@@ -205,6 +208,12 @@ impl PeerNode {
           rtt_map.insert(pid, rtt_us);
           reused_conns.lock().insert(pid, stream);
         }
+      }
+      if candidate_peers
+        .iter()
+        .any(|p| rtt_map.contains_key(&p.endpoint_id))
+      {
+        candidate_peers.retain(|p| rtt_map.contains_key(&p.endpoint_id));
       }
     }
 
@@ -258,6 +267,7 @@ impl PeerNode {
       let paths_watch = sel_paths.clone();
       thread::spawn(move || {
         let mut reported_hi = 0u32;
+        let mut conn_opt: Option<TcpStream> = None;
         while !leech_flag.load(Ordering::Acquire) {
           thread::sleep(Duration::from_millis(60));
           if leech_flag.load(Ordering::Acquire) {
@@ -269,10 +279,12 @@ impl PeerNode {
           }
           if cur_hi >= reported_hi + 8 || (cur_hi == total_blocks && cur_hi > reported_hi) {
             reported_hi = cur_hi;
-            if let Some(addr) = resolve_iroh_endpoint(&origin_pid)
-              && let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(200))
+            if conn_opt.is_none()
+              && let Some(addr) = resolve_iroh_endpoint(&origin_pid)
             {
-              let _ = s.set_nodelay(true);
+              conn_opt = connect_ctrl_tcp(&addr).ok();
+            }
+            if let Some(s) = conn_opt.as_mut() {
               let have_req = P2pReq {
                 op: Op::Have,
                 flags: FLAG_SEED,
@@ -284,8 +296,11 @@ impl PeerNode {
                 range: Some((root_hash, 0, cur_hi)),
                 token: tok,
               };
-              if let Ok(enc) = have_req.encode() {
-                let _ = write_frame(&mut s, &enc);
+              let ok = have_req
+                .encode()
+                .is_ok_and(|enc| write_frame(s, &enc).is_ok() && read_frame(s).is_ok());
+              if !ok {
+                conn_opt = None;
               }
             }
           }

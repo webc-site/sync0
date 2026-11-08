@@ -9,15 +9,18 @@ use s0_cdc::get_bit;
 
 use super::{
   MAX_NACK_RESEND_BATCH, Pacer, RangeSpec, SUPER_MAX_BYTES, SUPER_MAX_EXTRA, SUPER_SMALL_LIMIT,
-  TX_CACHE_SLOTS, TxCacheSlot, UdpStats, WAN_DEFAULT_RATE_BPS, seg_payload_for_addr,
+  TUNNEL_SEG_PAYLOAD, TX_CACHE_SLOTS, TxCacheSlot, UdpStats, WAN_DEFAULT_RATE_BPS,
+  seg_payload_for_sock,
 };
 use crate::{
   BlockSource, UdpError,
   bench::{handle_probe_observed, now_us, send_udp},
   codec::{Codec, Detector},
   consts::{
-    DATA_FLAG_ZSTD, DATA_HDR_LEN, MAX_UDP_PKT, PKT_ACK, PKT_NACK, PKT_PUNCH, ZSTD_DEFAULT_LEVEL,
+    DATA_FLAG_ZSTD, DATA_HDR_LEN, DEFAULT_SEG_PAYLOAD, MAX_UDP_PKT, PKT_ACK, PKT_NACK, PKT_PUNCH,
+    ZSTD_DEFAULT_LEVEL,
   },
+  is_emsgsize,
   wire::{AckPkt, DataHeader, NackPkt, decode_punch, encode_punch},
 };
 
@@ -25,6 +28,7 @@ struct SendCtx<'a> {
   sock: &'a UdpSocket,
   peer_addr: SocketAddr,
   seg_payload: usize,
+  pmtu_ok: bool,
   session_id: u32,
   blk_lo: u32,
   last_entry_idx: u32,
@@ -43,10 +47,13 @@ struct SendCtx<'a> {
 
 impl<'a> SendCtx<'a> {
   #[inline]
-  fn update_peer_addr(&mut self, from: SocketAddr) {
+  fn update_peer_addr(&mut self, from: SocketAddr, punch_len: usize) {
+    self.pmtu_ok |= punch_len >= DEFAULT_SEG_PAYLOAD;
     if self.peer_addr != from {
       self.peer_addr = from;
-      self.seg_payload = seg_payload_for_addr(from);
+      if !self.pmtu_ok {
+        self.seg_payload = seg_payload_for_sock(self.sock, from);
+      }
     }
   }
 
@@ -76,27 +83,25 @@ impl<'a> SendCtx<'a> {
       return Ok((bytes, u32::from(bytes > 0), start_blk));
     }
 
-    // 尝试将连续缺失的小文件或可压块聚合成单个 <= 64KiB 的 SuperBlock（跨块联合 Zstd 压缩，零头部膨胀）
-    let mut total_raw = first_loc.len as usize;
-    let mut extra = 0u8;
-    let mut cur_blk = start_blk + 1;
+    let (mut total_raw, mut extra, mut cur_blk) = (first_loc.len as usize, 0u8, start_blk + 1);
     while cur_blk < hi && extra < SUPER_MAX_EXTRA {
       if get_bit(have_bits, cur_blk) || !self.source.has_block(cur_blk) {
         break;
       }
-      let Some(loc) = self.source.block_loc(cur_blk) else {
+      let Some(loc) = self
+        .source
+        .block_loc(cur_blk)
+        .filter(|l| l.len <= coalesce_limit && total_raw + (l.len as usize) <= SUPER_MAX_BYTES)
+      else {
         break;
       };
-      if loc.len > coalesce_limit || total_raw + (loc.len as usize) > SUPER_MAX_BYTES {
-        break;
-      }
       total_raw += loc.len as usize;
       extra += 1;
       cur_blk += 1;
     }
 
+    let tail = dup_tail && cur_blk >= hi;
     if extra == 0 {
-      let tail = dup_tail && cur_blk >= hi;
       let bytes = self.prepare_and_send(start_blk, 0, first_loc.len as usize, 0, tail)?;
       return Ok((bytes, u32::from(bytes > 0), start_blk));
     }
@@ -111,11 +116,8 @@ impl<'a> SendCtx<'a> {
         .read_loc_into(b, loc, &mut self.block_buf[offset..offset + len])?;
       offset += len;
     }
-
-    let tail = dup_tail && cur_blk >= hi;
     let bytes = self.compress_and_transmit(start_blk, extra, total_raw, 0, tail)?;
-    let count = 1 + u32::from(extra);
-    Ok((bytes, count, start_blk + u32::from(extra)))
+    Ok((bytes, 1 + u32::from(extra), start_blk + u32::from(extra)))
   }
 
   /// 发送单个块或已缓存 SuperBlock（支持 64-bit 分片掩码过滤与 2048 槽位环缓存命中，返回 `(发送字节数, 覆盖块数)`）
@@ -126,15 +128,19 @@ impl<'a> SendCtx<'a> {
   ) -> Result<(u64, u32), UdpError> {
     let slot_idx = (block_idx as usize) & (TX_CACHE_SLOTS - 1);
     if self.cache[slot_idx].block_idx == block_idx {
-      let raw_len = self.cache[slot_idx].raw_len as u64;
-      let count = 1 + u32::from(self.cache[slot_idx].extra_blocks);
+      let (raw_len, count) = (
+        self.cache[slot_idx].raw_len as u64,
+        1 + u32::from(self.cache[slot_idx].extra_blocks),
+      );
       self.transmit_cached_slot(slot_idx, have_seg_mask, false)?;
       return Ok((raw_len, count));
     }
-    if !self.source.has_block(block_idx) {
-      return Ok((0, 0));
-    }
-    let Some(loc) = self.source.block_loc(block_idx) else {
+    let Some(loc) = self
+      .source
+      .has_block(block_idx)
+      .then(|| self.source.block_loc(block_idx))
+      .flatten()
+    else {
       return Ok((0, 0));
     };
     let mask = if loc.len > SUPER_SMALL_LIMIT {
@@ -179,7 +185,6 @@ impl<'a> SendCtx<'a> {
     slot.extra_blocks = extra_blocks;
     slot.raw_len = raw_len as u32;
     slot.wire_data.clear();
-
     if raw_len >= 256
       && let Ok(Some(comp)) = self.detector.compress(&self.block_buf, &mut self.codec)
     {
@@ -189,7 +194,6 @@ impl<'a> SendCtx<'a> {
       slot.wire_data.extend_from_slice(&self.block_buf);
       slot.zstd = false;
     }
-
     self.transmit_cached_slot(slot_idx, have_seg_mask, dup_tail)?;
     Ok(raw_len as u64)
   }
@@ -197,49 +201,56 @@ impl<'a> SendCtx<'a> {
   fn transmit_cached_slot(
     &mut self,
     slot_idx: usize,
-    have_seg_mask: u64,
+    mut have_seg_mask: u64,
     dup_tail: bool,
   ) -> Result<(), UdpError> {
-    let sid = self.session_id & 0x00FF_FFFF;
-    let seg_payload = self.seg_payload;
-    let slot = &self.cache[slot_idx];
-    let block_idx = slot.block_idx;
-    let extra_prefix = u32::from(slot.extra_blocks) << 24;
-    let total_len = slot.wire_data.len();
-    let seg_cnt = slot.seg_cnt(seg_payload);
-    let flagged_cnt = if slot.zstd {
-      seg_cnt | DATA_FLAG_ZSTD
-    } else {
-      seg_cnt
-    };
+    'retry_mtu: loop {
+      let sid = self.session_id & 0x00FF_FFFF;
+      let seg_payload = self.seg_payload;
+      let slot = &self.cache[slot_idx];
+      let (block_idx, total_len) = (slot.block_idx, slot.wire_data.len());
+      let extra_prefix = u32::from(slot.extra_blocks) << 24;
+      let seg_cnt = slot.seg_cnt(seg_payload);
+      let flagged_cnt = seg_cnt | if slot.zstd { DATA_FLAG_ZSTD } else { 0 };
 
-    for seg_idx in 0..seg_cnt {
-      if seg_idx < 64 && (have_seg_mask & (1u64 << seg_idx)) != 0 {
-        continue;
+      for seg_idx in 0..seg_cnt {
+        if seg_idx < 64 && (have_seg_mask & (1u64 << seg_idx)) != 0 {
+          continue;
+        }
+        let off = (seg_idx as usize) * seg_payload;
+        let end = (off + seg_payload).min(total_len);
+        let payload = &self.cache[slot_idx].wire_data[off..end];
+        let hdr = DataHeader {
+          session_id: sid,
+          block_idx,
+          seg_idx,
+          seg_cnt: flagged_cnt,
+          offset_in_block: extra_prefix | (off as u32),
+          payload_len: payload.len() as u16,
+        };
+        let hdr_slice: &mut [u8; DATA_HDR_LEN] =
+          (&mut self.pkt_buf[..DATA_HDR_LEN]).try_into().unwrap();
+        hdr.encode(hdr_slice);
+        self.pkt_buf[DATA_HDR_LEN..DATA_HDR_LEN + payload.len()].copy_from_slice(payload);
+        let pkt_len = DATA_HDR_LEN + payload.len();
+        if let Err(e) = send_udp(self.sock, &self.pkt_buf[..pkt_len], self.peer_addr) {
+          if let UdpError::Io(ref io_err) = e
+            && is_emsgsize(io_err)
+            && self.seg_payload > TUNNEL_SEG_PAYLOAD
+          {
+            self.seg_payload = TUNNEL_SEG_PAYLOAD;
+            have_seg_mask = 0;
+            continue 'retry_mtu;
+          }
+          return Err(e);
+        }
+        self.pacer.on_send(pkt_len);
+        if dup_tail && seg_idx + 2 >= seg_cnt {
+          let _ = send_udp(self.sock, &self.pkt_buf[..pkt_len], self.peer_addr);
+        }
       }
-      let off = (seg_idx as usize) * seg_payload;
-      let end = (off + seg_payload).min(total_len);
-      let payload = &self.cache[slot_idx].wire_data[off..end];
-      let hdr = DataHeader {
-        session_id: sid,
-        block_idx,
-        seg_idx,
-        seg_cnt: flagged_cnt,
-        offset_in_block: extra_prefix | (off as u32),
-        payload_len: payload.len() as u16,
-      };
-      let hdr_slice: &mut [u8; DATA_HDR_LEN] =
-        (&mut self.pkt_buf[..DATA_HDR_LEN]).try_into().unwrap();
-      hdr.encode(hdr_slice);
-      self.pkt_buf[DATA_HDR_LEN..DATA_HDR_LEN + payload.len()].copy_from_slice(payload);
-      let pkt_len = DATA_HDR_LEN + payload.len();
-      send_udp(self.sock, &self.pkt_buf[..pkt_len], self.peer_addr)?;
-      self.pacer.on_send(pkt_len);
-      if dup_tail && seg_idx + 2 >= seg_cnt {
-        send_udp(self.sock, &self.pkt_buf[..pkt_len], self.peer_addr)?;
-      }
+      return Ok(());
     }
-    Ok(())
   }
 
   fn handle_nack(&mut self, nack: &NackPkt, hi_bound: u32) -> Result<u64, UdpError> {
@@ -260,11 +271,20 @@ impl<'a> SendCtx<'a> {
           r_blk += 1;
           continue;
         }
-        let mask = nack
+        let mut mask = nack
           .partials
           .iter()
           .find(|&&(b, _)| b == r_blk)
           .map_or(0, |&(_, m)| m);
+        if self.seg_payload > TUNNEL_SEG_PAYLOAD && !self.pmtu_ok && mask == 0 {
+          let s_idx = (r_blk as usize) & (TX_CACHE_SLOTS - 1);
+          if self.cache[s_idx].block_idx == r_blk
+            && self.cache[s_idx].wire_data.len() > TUNNEL_SEG_PAYLOAD
+          {
+            self.seg_payload = TUNNEL_SEG_PAYLOAD;
+            mask = 0;
+          }
+        }
         let (sent, count) = self.send_block_masked(r_blk, mask)?;
         let step = count.max(1);
         if sent > 0 {
@@ -291,32 +311,21 @@ impl<'a> SendCtx<'a> {
     sid24: u32,
     hi_bound: u32,
   ) -> Result<(bool, Option<u64>), UdpError> {
-    if pkt.is_empty() {
-      return Ok((false, None));
-    }
-    match pkt[0] {
-      PKT_PUNCH => {
-        if decode_punch(pkt) == Ok(sid24) {
-          self.update_peer_addr(from);
-        }
+    match pkt.first().copied() {
+      Some(PKT_PUNCH) if decode_punch(pkt) == Ok(sid24) => {
+        self.update_peer_addr(from, pkt.len());
         Ok((false, None))
       }
-      PKT_ACK => {
-        if let Ok(ack) = AckPkt::decode(pkt)
-          && ack.session_id == sid24
-        {
-          self.update_peer_addr(from);
-          return Ok((true, None));
-        }
-        Ok((false, None))
+      Some(PKT_ACK) if AckPkt::decode(pkt).is_ok_and(|a| a.session_id == sid24) => {
+        self.update_peer_addr(from, 0);
+        Ok((true, None))
       }
-      PKT_NACK => {
+      Some(PKT_NACK) => {
         if let Ok(nack) = NackPkt::decode(pkt)
           && nack.session_id == sid24
         {
-          self.update_peer_addr(from);
-          let resent = self.handle_nack(&nack, hi_bound)?;
-          return Ok((false, Some(resent)));
+          self.update_peer_addr(from, 0);
+          return Ok((false, Some(self.handle_nack(&nack, hi_bound)?)));
         }
         Ok((false, None))
       }
@@ -347,11 +356,12 @@ pub fn send_range_udp<'a>(
   } else {
     spec.eff_rate
   };
-  let span_len = (hi - spec.blk_lo) as usize;
+  let (span_len, sid24) = ((hi - spec.blk_lo) as usize, spec.session_id & 0x00FF_FFFF);
   let mut ctx = SendCtx {
     sock,
     peer_addr,
-    seg_payload: seg_payload_for_addr(peer_addr),
+    seg_payload: seg_payload_for_sock(sock, peer_addr),
+    pmtu_ok: is_loopback,
     session_id: spec.session_id,
     blk_lo: spec.blk_lo,
     last_entry_idx: u32::MAX,
@@ -370,9 +380,7 @@ pub fn send_range_udp<'a>(
     last_retrans_us: vec![0u64; span_len],
   };
   let mut ctrl_buf = [0u8; MAX_UDP_PKT];
-  let mut bytes_transferred = 0u64;
-  let mut blocks_transferred = 0u32;
-  let sid24 = spec.session_id & 0x00FF_FFFF;
+  let (mut bytes_transferred, mut blocks_transferred) = (0u64, 0u32);
   let mut amp: AntiAmp<SocketAddr> = AntiAmp::default();
   let timeout_us = spec.timeout.as_micros() as u64;
   let mut deadline_us = now_us().saturating_add(timeout_us);
@@ -385,12 +393,11 @@ pub fn send_range_udp<'a>(
     if now_us() >= deadline_us {
       return Err(UdpError::Timeout(spec.blk_lo, hi));
     }
-    let targets = if start.elapsed() < Duration::from_millis(15) {
+    for addr in if start.elapsed() < Duration::from_millis(15) {
       &peer_addrs[..1]
     } else {
       peer_addrs
-    };
-    for addr in targets {
+    } {
       let _ = sock.send_to(&punch_pkt, addr);
     }
     match sock.recv_from(&mut ctrl_buf) {
@@ -408,12 +415,11 @@ pub fn send_range_udp<'a>(
         if valid_sid {
           let _ = amp.on_recv(from, n);
           amp.mark_validated();
-          ctx.update_peer_addr(from);
+          ctx.update_peer_addr(from, if ctrl_buf[0] == PKT_PUNCH { n } else { 0 });
           if ctrl_buf[0] == PKT_ACK {
             return Ok(UdpStats {
-              bytes_transferred: 0,
-              blocks_transferred: 0,
               elapsed_us: start.elapsed().as_micros() as u64,
+              ..Default::default()
             });
           }
         }
@@ -483,9 +489,7 @@ pub fn send_range_udp<'a>(
           bytes_transferred += resent;
         }
       }
-      Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {
-        continue;
-      }
+      Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.kind() == io::ErrorKind::TimedOut => {}
       Err(e) => return Err(UdpError::Io(e)),
     }
   }
