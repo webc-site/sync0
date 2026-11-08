@@ -78,7 +78,7 @@ mkdirSync(OUT_RSYNC, { recursive: true });
 
 // (b) many-files: 500 个源码小文件 (~2 MiB)
 {
-  const seed = Buffer.concat(Array(2).fill(readFileSync("s0_udp/src/lib.rs"))).subarray(0, 4096);
+  const seed = Buffer.concat(Array(2).fill(readFileSync("crate/s0_udp/src/lib.rs"))).subarray(0, 4096);
   for (let i = 0; i < 500; i++) {
     const dir = `${BASE_DIR}/many-files/d${Math.floor(i / 25)}`;
     mkdirSync(dir, { recursive: true });
