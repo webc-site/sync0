@@ -5,16 +5,61 @@ use parking_lot::Mutex;
 use s0_cdc::{FLAG_PARTIAL, Manifest};
 
 use super::{
-  PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
-  pull::{RangePullJob, connect_ctrl_addrs, execute_striped_pull, read_frame, write_frame},
+  PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id, min_nonzero,
+  pull::{
+    RangePullJob, connect_ctrl_addrs, execute_striped_pull, read_frame, send_req_recv_resp,
+    write_frame,
+  },
   resolve_iroh_endpoints,
-  server::{ServerCtx, build_swarm_peers},
+  server::{ServerCtx, SwarmSeedRecord},
 };
 use crate::{
   consts::{FLAG_SEED, Op, Status},
   fs::{FsError, SharedSink, build_manifest_from_paths},
-  wire::{P2pReq, P2pResp, SubPush, SwarmPeer, decode_socket_addrs},
+  region::Region,
+  wire::{P2pReq, SubPush, SwarmPeer, decode_socket_addrs, encode_socket_addrs},
 };
+
+/// 构建本节点 + 已匹配 `root_hash` 的在线做种节点列表（`Stat` 与 `SubPush` 一处定义复用）
+pub(crate) fn build_swarm_peers(
+  origin: (PeerId, Region, &[u8], &[u8]),
+  snap: (u64, u32, [u8; 16]),
+  seeds: &[SwarmSeedRecord],
+  exclude_id: PeerId,
+) -> Vec<SwarmPeer> {
+  let (my_id, my_region, my_ctrl_addrs, my_card) = origin;
+  let (eff_rate, total_blks, root_hash) = snap;
+  let mut peers = Vec::with_capacity(1 + seeds.len());
+  peers.push(SwarmPeer {
+    endpoint_id: my_id,
+    region: my_region,
+    weight_rate: eff_rate,
+    blk_lo: 0,
+    blk_hi: total_blks,
+    peer_addrs: my_ctrl_addrs.to_vec(),
+    profile_card: my_card.to_vec(),
+  });
+  for s in seeds {
+    if s.root_hash == root_hash && s.endpoint_id != exclude_id {
+      let seed_addrs = resolve_iroh_endpoints(&s.endpoint_id);
+      let encoded_addrs = if seed_addrs.is_empty() {
+        encode_socket_addrs(&[s.ctrl_addr])
+      } else {
+        encode_socket_addrs(&seed_addrs)
+      };
+      peers.push(SwarmPeer {
+        endpoint_id: s.endpoint_id,
+        region: s.region,
+        weight_rate: min_nonzero(s.weight_rate, eff_rate),
+        blk_lo: s.blk_lo,
+        blk_hi: s.blk_hi,
+        peer_addrs: encoded_addrs,
+        profile_card: s.profile_card.clone(),
+      });
+    }
+  }
+  peers
+}
 
 impl PeerNode {
   /// 长连接订阅远端对等节点的分享组 (`Op::Sub = 4`)
@@ -54,9 +99,7 @@ impl PeerNode {
       token: opts.token,
       byte_range: None,
     };
-    write_frame(&mut stream, &req.encode()?)?;
-    let resp_raw = read_frame(&mut stream)?;
-    let resp = P2pResp::decode(&resp_raw)?;
+    let resp = send_req_recv_resp(&mut stream, &req)?;
     self.ingest_resp_profiles(&resp, true);
     if resp.status != Status::Ok {
       return Err(PeerError::RemoteStatus(resp.status));
@@ -116,15 +159,12 @@ impl PeerNode {
         token: None,
         byte_range: None,
       };
-      if let Ok(mut stream) = self.connect_peer(&peer_id) {
-        let _ = write_frame(&mut stream, &req.encode()?);
-        if let Ok(raw) = read_frame(&mut stream)
-          && let Ok(resp) = P2pResp::decode(&raw)
-        {
-          self.ingest_resp_profiles(&resp, true);
-          if let Some((rh, ..)) = range {
-            self.ingest_swarm_seeds(share_id, rh, &resp.peers);
-          }
+      if let Ok(mut stream) = self.connect_peer(&peer_id)
+        && let Ok(resp) = send_req_recv_resp(&mut stream, &req)
+      {
+        self.ingest_resp_profiles(&resp, true);
+        if let Some((rh, ..)) = range {
+          self.ingest_swarm_seeds(share_id, rh, &resp.peers);
         }
       }
     }
@@ -289,8 +329,7 @@ pub(crate) fn handle_incoming_sub_push(
       byte_range: None,
     };
     if let Ok(mut s) = connect_ctrl_addrs(&origin_addrs) {
-      let _ = write_frame(&mut s, &have_req.encode()?);
-      let _ = read_frame(&mut s);
+      let _ = send_req_recv_resp(&mut s, &have_req);
     }
   }
 

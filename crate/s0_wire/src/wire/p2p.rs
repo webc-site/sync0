@@ -389,11 +389,9 @@ impl SubPush {
   }
 }
 
-/// 编解码多个 UDP 候选打洞地址 (`SocketAddr`)
-pub fn encode_socket_addrs(addrs: &[SocketAddr]) -> Vec<u8> {
-  let mut out = Vec::with_capacity(1 + addrs.len() * 19);
-  out.push(addrs.len().min(16) as u8);
-  for addr in addrs.iter().take(16) {
+/// 将多个 `SocketAddr` 编码为无长度前缀的紧凑二进制标签序列（`4` + 4B IPv4 + 2B Port 或 `6` + 16B IPv6 + 2B Port）
+pub fn encode_raw_socket_addrs(addrs: &[SocketAddr], max_cnt: usize, out: &mut Vec<u8>) {
+  for addr in addrs.iter().take(max_cnt) {
     match addr {
       SocketAddr::V4(v4) => {
         out.push(4);
@@ -407,17 +405,13 @@ pub fn encode_socket_addrs(addrs: &[SocketAddr]) -> Vec<u8> {
       }
     }
   }
-  out
 }
 
-pub fn decode_socket_addrs(buf: &[u8]) -> Result<Vec<SocketAddr>, WireError> {
-  if buf.is_empty() {
-    return Ok(Vec::new());
-  }
+/// 解码无长度前缀的紧凑二进制 `SocketAddr` 标签序列
+pub fn decode_raw_socket_addrs(buf: &[u8], max_cnt: usize) -> Result<Vec<SocketAddr>, WireError> {
   let mut r = Rd::new(buf);
-  let cnt = r.u8()? as usize;
-  let mut out = Vec::with_capacity(cnt.min(16));
-  for _ in 0..cnt {
+  let mut out = Vec::with_capacity(max_cnt.min(16));
+  while !r.is_empty() && out.len() < max_cnt {
     match r.u8()? {
       4 => {
         let ip = Ipv4Addr::from(r.array::<4>()?);
@@ -431,6 +425,26 @@ pub fn decode_socket_addrs(buf: &[u8]) -> Result<Vec<SocketAddr>, WireError> {
       }
       _ => return Err(WireError::BadMagic),
     }
+  }
+  Ok(out)
+}
+
+/// 编解码多个 UDP 候选打洞地址 (`SocketAddr`)
+pub fn encode_socket_addrs(addrs: &[SocketAddr]) -> Vec<u8> {
+  let mut out = Vec::with_capacity(1 + addrs.len() * 19);
+  out.push(addrs.len().min(16) as u8);
+  encode_raw_socket_addrs(addrs, 16, &mut out);
+  out
+}
+
+pub fn decode_socket_addrs(buf: &[u8]) -> Result<Vec<SocketAddr>, WireError> {
+  if buf.is_empty() {
+    return Ok(Vec::new());
+  }
+  let cnt = buf[0] as usize;
+  let out = decode_raw_socket_addrs(&buf[1..], cnt)?;
+  if out.len() < cnt {
+    return Err(WireError::Truncated);
   }
   Ok(out)
 }

@@ -11,16 +11,16 @@ use s0_cdc::{
 
 pub(super) use super::sink_basis::Dec;
 use super::{
-  DGRAM, RootBuf,
+  MAX_DATAGRAM, RootBuf,
   manifest::{Entry, try_build_final_dir_ack},
   sink_basis::{
-    SinglePrecheck, TargetFile, build_dir_basis, check_single_chunk, create_trunc,
-    flush_small_writes, open_nonempty_basis, precheck_single_chunks,
+    SinglePrecheck, TargetFile, build_dir_basis, check_single_chunk, flush_small_writes,
+    open_nonempty_basis, precheck_single_chunks,
   },
 };
 use crate::{
   UdpError,
-  fs::{Staging, copy_file_spans, prune_dir, remove},
+  fs::{Staging, copy_file_spans, create_trunc, open_rw, prune_dir, remove},
 };
 
 /// 本地基准块拷贝缓冲（256 KiB）
@@ -66,19 +66,12 @@ impl Sink {
   fn push_full(&mut self, write_path: PathBuf, size: u64, delta_total: &mut u64) {
     let d_off = *delta_total;
     *delta_total += size;
-    let file_idx = self.files.len();
-    self.files.push(TargetFile {
-      write_path,
-      size,
-      rem: size,
-      created: false,
-    });
-    self.spans.push(RxSpan {
-      file_idx,
-      dst_off: 0,
+    let span = DataSpan {
+      file_off: 0,
       delta_off: d_off,
       len: size,
-    });
+    };
+    let _ = self.push_data_spans(write_path, size, size, false, vec![span]);
   }
 
   fn push_data_spans(
@@ -155,24 +148,27 @@ impl Sink {
     } else {
       out.is_dir()
     };
-    let (sk, dt, have_bits) = Self::prepare_with_limit(out, &entries, usize::MAX)?;
+    let (sk, dt, have_bits) =
+      Self::prepare_with_limit(out, &entries, (single_file, out_existed), usize::MAX)?;
     let (mut sk, delta_total, final_ack) = if let Some(ack) =
       try_build_final_dir_ack(base_ack, &have_bits, dt == 0)?
     {
       (sk, dt, ack)
     } else {
-      let max_bits = DGRAM.saturating_sub(base_ack.len() + 4) * 8;
-      let (sk, dt, have_bits) = Self::prepare_with_limit(out, &entries, max_bits)?;
+      let max_bits = MAX_DATAGRAM.saturating_sub(base_ack.len() + 4) * 8;
+      let (sk, dt, have_bits) =
+        Self::prepare_with_limit(out, &entries, (single_file, out_existed), max_bits)?;
       let ack = try_build_final_dir_ack(base_ack, &have_bits, dt == 0)?.ok_or(UdpError::Corrupt)?;
       (sk, dt, ack)
     };
     if delete && !single_file && out_existed {
-      let keep: Vec<String> = entries
-        .into_iter()
-        .filter(|e| !e.del)
-        .map(|e| e.path)
-        .collect();
-      sk.prune = Some(keep);
+      sk.prune = Some(
+        entries
+          .into_iter()
+          .filter(|e| !e.del)
+          .map(|e| e.path)
+          .collect(),
+      );
     }
     Ok((sk, delta_total, final_ack))
   }
@@ -180,14 +176,9 @@ impl Sink {
   fn prepare_with_limit(
     out: &Path,
     entries: &[Entry],
+    (single_file, out_existed): (bool, bool),
     max_bits: usize,
   ) -> Result<(Self, u64, Vec<u8>), UdpError> {
-    let single_file = entries.len() == 1 && entries[0].path.is_empty();
-    let out_existed = if single_file {
-      out.exists()
-    } else {
-      out.is_dir()
-    };
     let mut root_buf = RootBuf::new(out);
     if single_file {
       if let Some(parent) = out.parent()
@@ -212,8 +203,7 @@ impl Sink {
 
     let total_chunks: usize = entries.iter().map(|e| e.chunks.len()).sum();
     let mut have_bits = vec![0u8; total_chunks.div_ceil(8)];
-    let mut bit_cursor = 0usize;
-    let mut delta_total = 0u64;
+    let (mut bit_cursor, mut delta_total) = (0usize, 0u64);
     let mut sk = Self {
       out_root: out.to_path_buf(),
       files: Vec::with_capacity(entries.len()),
@@ -228,9 +218,7 @@ impl Sink {
       small_buf: Vec::new(),
       small_writes: Vec::new(),
     };
-    let mut io_buf = Vec::new();
-    let mut file_basis = BasisIndex::new();
-    let mut dir_basis: Option<(BasisIndex, Vec<PathBuf>)> = None;
+    let (mut io_buf, mut file_basis, mut dir_basis) = (Vec::new(), BasisIndex::new(), None);
     let min_sz = CdcConfig::DEFAULT.min_size as u64;
     let prechecked = if out_existed && !single_file && entries.len() >= 16 {
       precheck_single_chunks(out, entries, min_sz)?
@@ -260,38 +248,30 @@ impl Sink {
         continue;
       }
       if bit_cursor.saturating_add(e.chunks.len()) <= max_bits {
-        if let Some(&pre) = prechecked.get(idx) {
-          match pre {
-            SinglePrecheck::SameHash => {
-              set_bit_usize(&mut have_bits, bit_cursor);
-              bit_cursor += 1;
-              continue;
-            }
-            SinglePrecheck::NeedFull => {
-              bit_cursor += 1;
-              sk.push_full(target.to_path_buf(), e.size, &mut delta_total);
-              continue;
-            }
-            SinglePrecheck::Fallback => {}
+        let mut basis_opt = open_nonempty_basis(target);
+        let pre = match prechecked.get(idx).copied() {
+          Some(p) => p,
+          None if e.chunks.len() == 1 => match &basis_opt {
+            Some((bf, bs)) => check_single_chunk(bf, *bs, e, min_sz, &mut io_buf)?,
+            None => SinglePrecheck::Fallback,
+          },
+          None => SinglePrecheck::Fallback,
+        };
+        match pre {
+          SinglePrecheck::SameHash => {
+            set_bit_usize(&mut have_bits, bit_cursor);
+            bit_cursor += 1;
+            continue;
           }
+          SinglePrecheck::NeedFull => {
+            drop(basis_opt.take());
+            bit_cursor += 1;
+            sk.push_full(target.to_path_buf(), e.size, &mut delta_total);
+            continue;
+          }
+          SinglePrecheck::Fallback => {}
         }
-        if let Some((basis_file, basis_size)) = open_nonempty_basis(target) {
-          if e.chunks.len() == 1 {
-            match check_single_chunk(&basis_file, basis_size, e, min_sz, &mut io_buf)? {
-              SinglePrecheck::SameHash => {
-                set_bit_usize(&mut have_bits, bit_cursor);
-                bit_cursor += 1;
-                continue;
-              }
-              SinglePrecheck::NeedFull => {
-                drop(basis_file);
-                bit_cursor += 1;
-                sk.push_full(target.to_path_buf(), e.size, &mut delta_total);
-                continue;
-              }
-              SinglePrecheck::Fallback => {}
-            }
-          }
+        if let Some((basis_file, basis_size)) = basis_opt.take() {
           let plan = match_basis_file(
             &e.chunks,
             (&basis_file, basis_size),
@@ -347,8 +327,7 @@ impl Sink {
     let mut copy_buf = vec![0u8; COPY_BUF_LEN];
     let mut cached_pool: Option<(u32, File)> = None;
     for pc in self.pending_copies.drain(..) {
-      let tmp_file = create_trunc(&pc.tmp_path)?;
-      tmp_file.set_len(pc.size)?;
+      let tmp_file = open_rw(&pc.tmp_path, true, pc.size)?;
       if let Some(basis_file) = &pc.basis_file {
         copy_file_spans(basis_file, &tmp_file, &pc.spans, &mut copy_buf)?;
       } else {
@@ -471,15 +450,11 @@ impl Sink {
           remove(&p)?;
         }
       }
-      let mut cur = p.parent();
-      while let Some(dir) = cur {
-        if dir == self.out_root || !dir.starts_with(&self.out_root) {
+      for dir in p.ancestors().skip(1) {
+        if dir == self.out_root || !dir.starts_with(&self.out_root) || fs::remove_dir(dir).is_err()
+        {
           break;
         }
-        if fs::remove_dir(dir).is_err() {
-          break;
-        }
-        cur = dir.parent();
       }
     }
     if let Some(keep) = self.prune.take() {

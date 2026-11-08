@@ -3,19 +3,21 @@ use std::{fs::File, path::Path, thread};
 use s0_cdc::{CdcConfig, ChunkSig, FileAt, Rd, Wr as VecWr, chunk_file_with_buf, chunk_slice};
 
 pub(super) use super::manifest_net::{ManifestRx, send_manifest, try_build_final_dir_ack};
-use super::{DGRAM, MANIFEST_CHUNK, MANIFEST_ZSTD, RootBuf, ZSTD_LEVEL, par_chunk_plan};
+use super::{
+  MANIFEST_CHUNK, MANIFEST_ZSTD, MAX_BLOCK, MAX_DATAGRAM, RootBuf, ZSTD_DEFAULT_LEVEL,
+  par_chunk_plan,
+};
 use crate::{
   UdpError,
   codec::{Codec, SLACK},
   consts::{
-    DIR_ACK_HDR_LEN, HAVE_ALL_ONES_BIT as HAVE_ALL_ONES, MANIFEST_DELETE, MANIFEST_PARTIAL,
-    MAX_BLOCK, TOMBSTONE_NCHUNKS,
+    DIR_ACK_HDR_LEN, HAVE_ALL_ONES_BIT, MANIFEST_DELETE, MANIFEST_PARTIAL, TOMBSTONE_NCHUNKS,
   },
   fs::{ScannedFile, rel_path, scan_files},
 };
 
 /// 单包 `DIR_ACK` 可容纳的最大位图字节数
-const MAX_MANIFEST_BITMAP: usize = DGRAM - DIR_ACK_HDR_LEN - 4;
+const MAX_MANIFEST_BITMAP: usize = MAX_DATAGRAM - DIR_ACK_HDR_LEN - 4;
 /// 清单编码后最大字节数（受限于单包 `DIR_ACK` 位图容量）
 pub(super) const MAX_MANIFEST_ENCODED: usize = MAX_MANIFEST_BITMAP * 8 * MANIFEST_CHUNK;
 /// 清单解压后最大字节数（64 MiB）
@@ -29,7 +31,7 @@ pub(super) const MIN_ZSTD_BYTES: usize = 256;
 /// 路径长度上限
 const MAX_PATH_LEN: usize = 0x7FFF;
 const MANIFEST_FLAGS: u32 = MANIFEST_DELETE | MANIFEST_PARTIAL;
-pub(super) const HAVE_FLAGS: u32 = MANIFEST_ZSTD | HAVE_ALL_ONES;
+pub(super) const HAVE_FLAGS: u32 = MANIFEST_ZSTD | HAVE_ALL_ONES_BIT;
 const _: () = assert!(CdcConfig::DEFAULT.max_size <= (u16::MAX as usize) + 1);
 const _: () = assert!((MAX_MANIFEST_ENTRIES as u32) & MANIFEST_FLAGS == 0);
 
@@ -237,15 +239,8 @@ const fn scanned_small_cap(first_size: u64) -> usize {
   if est < 256 * 1024 { 256 * 1024 } else { est }
 }
 
-pub(super) fn entries_from_scanned(
-  root: &Path,
-  scanned: Vec<ScannedFile>,
-) -> Result<(Vec<Entry>, Vec<u8>, u64), UdpError> {
-  entries_from_changes(root, scanned, Vec::new())
-}
-
 pub(super) fn scan_dir(root: &Path) -> Result<(Vec<Entry>, Vec<u8>, u64), UdpError> {
-  entries_from_scanned(root, scan_files(root)?)
+  entries_from_changes(root, scan_files(root)?, Vec::new())
 }
 
 pub(super) fn encode_manifest(entries: &[Entry], mode: ManifestMode) -> Result<Vec<u8>, UdpError> {
@@ -312,7 +307,7 @@ pub(super) fn encode_manifest(entries: &[Entry], mode: ManifestMode) -> Result<V
     out.extend_from_slice(&raw);
     return Ok(out);
   }
-  let mut codec = Codec::new(ZSTD_LEVEL)?;
+  let mut codec = Codec::new(ZSTD_DEFAULT_LEVEL)?;
   let mut dst = vec![0u8; raw.len().min(MAX_BLOCK) + SLACK];
   let mut out = Vec::with_capacity(4 + raw.len() / 2);
   out.extend_from_slice(&raw_len.to_le_bytes());
@@ -353,7 +348,7 @@ pub(super) fn parse_manifest(b: &[u8]) -> Result<(Vec<Entry>, u64, ManifestMode)
     if zstd {
       let c = match &mut codec {
         Some(c) => c,
-        None => codec.insert(Codec::new(ZSTD_LEVEL)?),
+        None => codec.insert(Codec::new(ZSTD_DEFAULT_LEVEL)?),
       };
       let want = rem.min(MAX_BLOCK);
       let cur = raw.len();

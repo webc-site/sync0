@@ -17,7 +17,7 @@ use super::{
   PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
   pull::{
     RangePullJob, derive_push_session_id, execute_striped_pull, is_have_all_ones_frame,
-    probe_ctrl_addrs, read_frame, write_frame, write_two_frames,
+    probe_ctrl_addrs, read_frame, send_req_recv_resp, write_two_frames,
   },
   register_iroh_endpoints, resolve_iroh_endpoints,
   server::ShareState,
@@ -291,8 +291,7 @@ impl PeerNode {
           if cur_hi >= reported_hi + 8 || (cur_hi == total_blocks && cur_hi > reported_hi) {
             reported_hi = cur_hi;
             if conn_opt.is_none() {
-              let addrs = resolve_iroh_endpoints(&origin_pid);
-              conn_opt = probe_ctrl_addrs(&addrs).ok();
+              conn_opt = probe_ctrl_addrs(&resolve_iroh_endpoints(&origin_pid)).ok();
             }
             if let Some(s) = conn_opt.as_mut() {
               let have_req = P2pReq {
@@ -307,10 +306,7 @@ impl PeerNode {
                 token: tok,
                 byte_range: None,
               };
-              let ok = have_req
-                .encode()
-                .is_ok_and(|enc| write_frame(s, &enc).is_ok() && read_frame(s).is_ok());
-              if !ok {
+              if send_req_recv_resp(s, &have_req).is_err() {
                 conn_opt = None;
               }
             }
@@ -395,13 +391,15 @@ impl PeerNode {
 
     let mut stream = self.connect_peer(&peer_id)?;
     let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
-    let mut flags = 0u8;
-    if opts.delete_extraneous {
-      flags |= FLAG_DELETE;
-    }
-    if !sel_paths.is_empty() {
-      flags |= FLAG_PARTIAL;
-    }
+    let flags = (if opts.delete_extraneous {
+      FLAG_DELETE
+    } else {
+      0
+    }) | (if !sel_paths.is_empty() {
+      FLAG_PARTIAL
+    } else {
+      0
+    });
 
     let req = P2pReq {
       op: Op::Push,
@@ -416,11 +414,8 @@ impl PeerNode {
       byte_range: None,
     };
 
-    let req_bytes = req.encode()?;
-    write_two_frames(&mut stream, &req_bytes, &mf_bytes)?;
-
-    let resp_raw = read_frame(&mut stream)?;
-    let resp = P2pResp::decode(&resp_raw)?;
+    write_two_frames(&mut stream, &req.encode()?, &mf_bytes)?;
+    let resp = P2pResp::decode(&read_frame(&mut stream)?)?;
     self.ingest_resp_profiles(&resp, false);
     if resp.status != Status::Ok {
       return Err(PeerError::RemoteStatus(resp.status));
@@ -450,8 +445,7 @@ impl PeerNode {
       bytes_transferred = st.bytes_transferred;
     }
 
-    let done_raw = read_frame(&mut stream)?;
-    let done_resp = P2pResp::decode(&done_raw)?;
+    let done_resp = P2pResp::decode(&read_frame(&mut stream)?)?;
     if done_resp.status != Status::Ok {
       return Err(PeerError::RemoteStatus(done_resp.status));
     }

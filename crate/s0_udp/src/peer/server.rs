@@ -1,5 +1,6 @@
 use std::{
   net::{SocketAddr, TcpStream},
+  path::Path,
   sync::Arc,
   time::Duration,
 };
@@ -9,10 +10,10 @@ use parking_lot::RwLock;
 use s0_cdc::Manifest;
 
 use super::{
-  PeerError, PeerId, ShareConfig, min_nonzero,
-  pull::{derive_push_session_id, derive_session_id, read_frame, write_frame, write_two_frames},
-  register_iroh_endpoints, resolve_iroh_endpoints,
-  sub::handle_incoming_sub_push,
+  PeerError, PeerId, ShareConfig,
+  pull::{derive_push_session_id, derive_session_id, read_frame, write_resp, write_two_frames},
+  register_iroh_endpoints,
+  sub::{build_swarm_peers, handle_incoming_sub_push},
 };
 use crate::{
   RangeSpec, bind_udp_for_ip,
@@ -22,10 +23,7 @@ use crate::{
   punch_udp, recv_range_udp,
   region::Region,
   send_range_udp,
-  wire::{
-    P2pReq, P2pResp, ShareSummary, SwarmPeer, decode_socket_addrs, encode_share_summaries,
-    encode_socket_addrs,
-  },
+  wire::{P2pReq, P2pResp, ShareSummary, SwarmPeer, decode_socket_addrs, encode_share_summaries},
 };
 
 #[derive(Clone)]
@@ -98,47 +96,48 @@ impl ServerCtx {
       manifest,
     }
   }
-}
 
-/// 构建本节点 + 已匹配 `root_hash` 的在线做种节点列表（`Stat` 与 `SubPush` 一处定义复用）
-pub(crate) fn build_swarm_peers(
-  origin: (PeerId, Region, &[u8], &[u8]),
-  snap: (u64, u32, [u8; 16]),
-  seeds: &[SwarmSeedRecord],
-  exclude_id: PeerId,
-) -> Vec<SwarmPeer> {
-  let (my_id, my_region, my_ctrl_addrs, my_card) = origin;
-  let (eff_rate, total_blks, root_hash) = snap;
-  let mut peers = Vec::with_capacity(1 + seeds.len());
-  peers.push(SwarmPeer {
-    endpoint_id: my_id,
-    region: my_region,
-    weight_rate: eff_rate,
-    blk_lo: 0,
-    blk_hi: total_blks,
-    peer_addrs: my_ctrl_addrs.to_vec(),
-    profile_card: my_card.to_vec(),
-  });
-  for s in seeds {
-    if s.root_hash == root_hash && s.endpoint_id != exclude_id {
-      let seed_addrs = resolve_iroh_endpoints(&s.endpoint_id);
-      let encoded_addrs = if seed_addrs.is_empty() {
-        encode_socket_addrs(&[s.ctrl_addr])
-      } else {
-        encode_socket_addrs(&seed_addrs)
-      };
-      peers.push(SwarmPeer {
-        endpoint_id: s.endpoint_id,
-        region: s.region,
-        weight_rate: min_nonzero(s.weight_rate, eff_rate),
-        blk_lo: s.blk_lo,
-        blk_hi: s.blk_hi,
-        peer_addrs: encoded_addrs,
-        profile_card: s.profile_card.clone(),
-      });
-    }
+  fn ok_empty(&self, eff_rate: u64, root_hash: [u8; 16], peer_addrs: Vec<u8>) -> P2pResp {
+    self.ok_resp(eff_rate, root_hash, peer_addrs, Vec::new(), Vec::new())
   }
-  peers
+
+  fn swarm_peers(
+    &self,
+    eff_rate: u64,
+    total_blks: u32,
+    root_hash: [u8; 16],
+    seeds: &[SwarmSeedRecord],
+    exclude_id: PeerId,
+  ) -> Vec<SwarmPeer> {
+    build_swarm_peers(
+      (
+        self.my_id,
+        self.my_region,
+        &self.my_ctrl_addrs,
+        &self.my_card,
+      ),
+      (eff_rate, total_blks, root_hash),
+      seeds,
+      exclude_id,
+    )
+  }
+
+  fn build_and_cache(
+    &self,
+    share_id: [u8; 16],
+    root: &Path,
+    paths: &[String],
+    del: bool,
+  ) -> Option<([u8; 16], Manifest)> {
+    let mf = build_manifest_from_paths(root, paths, del && paths.is_empty()).ok()?;
+    let rh = mf.root_hash().ok()?;
+    if paths.is_empty()
+      && let Some(st) = self.shares.write().get_mut(&share_id)
+    {
+      st.cached_manifest = Some((rh, mf.clone()));
+    }
+    Some((rh, mf))
+  }
 }
 
 pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), PeerError> {
@@ -160,21 +159,21 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
     }
 
     if req.op == Op::ListShares {
-      let mut summaries = Vec::new();
-      {
-        let guard = ctx.shares.read();
-        for st in guard.values() {
-          if let Some(acc) = st.cfg.resolve_access(&remote_id, req.req_rate, req.token) {
-            summaries.push(ShareSummary {
-              share_id: st.cfg.share_id,
-              name: st.cfg.name.clone(),
-              perm: acc.perm,
-              eff_rate: acc.eff_rate,
-              write_prefixes: acc.write_prefixes,
-            });
-          }
-        }
-      }
+      let mut summaries: Vec<ShareSummary> = ctx
+        .shares
+        .read()
+        .values()
+        .filter_map(|st| {
+          let acc = st.cfg.resolve_access(&remote_id, req.req_rate, req.token)?;
+          Some(ShareSummary {
+            share_id: st.cfg.share_id,
+            name: st.cfg.name.clone(),
+            perm: acc.perm,
+            eff_rate: acc.eff_rate,
+            write_prefixes: acc.write_prefixes,
+          })
+        })
+        .collect();
       summaries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
       let resp = ctx.ok_resp(
         0,
@@ -183,17 +182,14 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         Vec::new(),
         encode_share_summaries(&summaries)?,
       );
-      write_frame(&mut stream, &resp.encode()?)?;
+      write_resp(&mut stream, &resp)?;
       continue;
     }
 
     let (share_cfg, seeds_snapshot, active_sink, cached_mf) = {
       let guard = ctx.shares.read();
       let Some(st) = guard.get(&req.share_id) else {
-        if matches!(req.op, Op::Pull | Op::Push) {
-          let _ = read_frame(&mut stream);
-        }
-        write_frame(&mut stream, &P2pResp::err(Status::NotFound).encode()?)?;
+        reject_req(&mut stream, req.op, Status::NotFound)?;
         continue;
       };
       (
@@ -205,10 +201,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
     };
 
     let Some(access) = share_cfg.resolve_access(&remote_id, req.req_rate, req.token) else {
-      if matches!(req.op, Op::Pull | Op::Push) {
-        let _ = read_frame(&mut stream);
-      }
-      write_frame(&mut stream, &P2pResp::err(Status::Unauth).encode()?)?;
+      reject_req(&mut stream, req.op, Status::Unauth)?;
       continue;
     };
 
@@ -227,32 +220,25 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           let bytes = sink_arc.manifest().encode().map_err(FsError::Cdc)?;
           (active_rh, bytes, sink_arc.total_blocks())
         } else {
-          let Ok(mf) = build_manifest_from_paths(
+          let Some((rh, mf)) = ctx.build_and_cache(
+            req.share_id,
             &share_cfg.root,
             &req.paths,
-            req.flags & FLAG_DELETE != 0 && req.paths.is_empty(),
+            req.flags & FLAG_DELETE != 0,
           ) else {
-            write_frame(&mut stream, &P2pResp::err(Status::NotFound).encode()?)?;
+            write_resp(&mut stream, &P2pResp::err(Status::NotFound))?;
             continue;
           };
-          let rh = mf.root_hash().map_err(FsError::Cdc)?;
-          let bytes = mf.encode().map_err(FsError::Cdc)?;
-          let blks = mf.total_blocks();
-          if req.paths.is_empty()
-            && let Some(st) = ctx.shares.write().get_mut(&req.share_id)
-          {
-            st.cached_manifest = Some((rh, mf));
-          }
-          (rh, bytes, blks)
+          (rh, mf.encode().map_err(FsError::Cdc)?, mf.total_blocks())
         };
 
-        let peers = build_swarm_peers(
-          (ctx.my_id, ctx.my_region, &ctx.my_ctrl_addrs, &ctx.my_card),
-          (access.eff_rate, total_blks, root_hash),
+        let peers = ctx.swarm_peers(
+          access.eff_rate,
+          total_blks,
+          root_hash,
           &seeds_snapshot,
           remote_id,
         );
-
         let resp = ctx.ok_resp(
           access.eff_rate,
           root_hash,
@@ -260,12 +246,11 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           peers,
           mf_bytes,
         );
-        write_frame(&mut stream, &resp.encode()?)?;
+        write_resp(&mut stream, &resp)?;
       }
 
       Op::Pull => {
         let have_bits = read_frame(&mut stream)?;
-
         if let Some((active_rh, ref sink_arc)) = active_sink
           && req.paths.is_empty()
           && req.range.is_none_or(|(req_rh, ..)| req_rh == active_rh)
@@ -273,11 +258,9 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           serve_pull_udp(
             &mut stream,
             ctx,
-            &req,
-            &have_bits,
-            access.eff_rate,
-            active_rh,
-            sink_arc.as_ref().into(),
+            (&req, &have_bits),
+            (access.eff_rate, active_rh),
+            sink_arc.as_ref(),
           )?;
           continue;
         }
@@ -288,33 +271,26 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         {
           (cached_rh, cached)
         } else {
-          let Ok(built) = build_manifest_from_paths(&share_cfg.root, &req.paths, false) else {
-            write_frame(&mut stream, &P2pResp::err(Status::NotFound).encode()?)?;
+          let Some(built) = ctx.build_and_cache(req.share_id, &share_cfg.root, &req.paths, false)
+          else {
+            write_resp(&mut stream, &P2pResp::err(Status::NotFound))?;
             continue;
           };
-          let rh = built.root_hash().map_err(FsError::Cdc)?;
-          if req.paths.is_empty()
-            && let Some(st) = ctx.shares.write().get_mut(&req.share_id)
-          {
-            st.cached_manifest = Some((rh, built.clone()));
-          }
-          (rh, built)
+          built
         };
         if let Some((req_rh, ..)) = req.range
           && req_rh != root_hash
         {
-          write_frame(&mut stream, &P2pResp::err(Status::Conflict).encode()?)?;
+          write_resp(&mut stream, &P2pResp::err(Status::Conflict))?;
           continue;
         }
         let reader = SourceReader::open(&share_cfg.root, mf)?;
         serve_pull_udp(
           &mut stream,
           ctx,
-          &req,
-          &have_bits,
-          access.eff_rate,
-          root_hash,
-          (&reader).into(),
+          (&req, &have_bits),
+          (access.eff_rate, root_hash),
+          &reader,
         )?;
       }
 
@@ -322,15 +298,11 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         let mf_raw = read_frame(&mut stream)?;
         let mut mf = Manifest::decode(&mf_raw).map_err(|e| PeerError::Fs(FsError::Cdc(e)))?;
 
-        if !access.can_write_manifest(&mf, &req.paths) {
-          write_frame(&mut stream, &P2pResp::err(Status::Forbidden).encode()?)?;
-          continue;
-        }
-        if !access.write_prefixes.is_empty()
+        let forbid_del = !access.write_prefixes.is_empty()
           && (req.flags & FLAG_DELETE != 0)
-          && req.paths.is_empty()
-        {
-          write_frame(&mut stream, &P2pResp::err(Status::Forbidden).encode()?)?;
+          && req.paths.is_empty();
+        if !access.can_write_manifest(&mf, &req.paths) || forbid_del {
+          write_resp(&mut stream, &P2pResp::err(Status::Forbidden))?;
           continue;
         }
 
@@ -343,14 +315,9 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         let total = sink.total_blocks();
 
         let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
-        let resp = ctx.ok_resp(
-          access.eff_rate,
-          root_hash,
-          my_udp_addrs,
-          Vec::new(),
-          Vec::new(),
-        );
-        let resp_bytes = resp.encode()?;
+        let resp_bytes = ctx
+          .ok_empty(access.eff_rate, root_hash, my_udp_addrs)
+          .encode()?;
         let init_have = sink.initial_have_bits();
         if total == 0 || is_all_have(init_have, total) {
           write_two_frames(&mut stream, &resp_bytes, &HAVE_ALL_ONES.to_le_bytes())?;
@@ -376,14 +343,10 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
         if let Some(st) = ctx.shares.write().get_mut(&req.share_id) {
           st.cached_manifest = None;
         }
-        let done = ctx.ok_resp(
-          access.eff_rate,
-          root_hash,
-          Vec::new(),
-          Vec::new(),
-          Vec::new(),
-        );
-        write_frame(&mut stream, &done.encode()?)?;
+        write_resp(
+          &mut stream,
+          &ctx.ok_empty(access.eff_rate, root_hash, Vec::new()),
+        )?;
       }
 
       Op::Sub | Op::GroupJoin | Op::Have => {
@@ -396,8 +359,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
           if remote_id != [0u8; 32] {
             register_iroh_endpoints(remote_id, &peer_ctrl_addrs);
           }
-          let mut guard = ctx.shares.write();
-          if let Some(st) = guard.get_mut(&req.share_id) {
+          if let Some(st) = ctx.shares.write().get_mut(&req.share_id) {
             if is_sub {
               st.subscribers.retain(|s| {
                 s.ctrl_addr != peer_ctrl && (remote_id == [0u8; 32] || s.endpoint_id != remote_id)
@@ -405,7 +367,7 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
               st.subscribers.push(SubscriberRecord {
                 endpoint_id: remote_id,
                 ctrl_addr: peer_ctrl,
-                paths: req.paths.clone(),
+                paths: req.paths,
                 eff_rate: access.eff_rate,
               });
             }
@@ -422,23 +384,19 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
                   weight_rate: access.eff_rate,
                 });
               }
-              swarm_peers = build_swarm_peers(
-                (ctx.my_id, ctx.my_region, &ctx.my_ctrl_addrs, &ctx.my_card),
-                (access.eff_rate, hi, rh),
-                &st.seeds,
-                remote_id,
-              );
+              swarm_peers = ctx.swarm_peers(access.eff_rate, hi, rh, &st.seeds, remote_id);
             }
           }
         }
+        let rh = req.range.map_or([0u8; 16], |(rh, ..)| rh);
         let resp = ctx.ok_resp(
           access.eff_rate,
-          req.range.map_or([0u8; 16], |(rh, ..)| rh),
+          rh,
           ctx.my_ctrl_addrs.clone(),
           swarm_peers,
           Vec::new(),
         );
-        write_frame(&mut stream, &resp.encode()?)?;
+        write_resp(&mut stream, &resp)?;
       }
 
       Op::ListShares => {}
@@ -448,15 +406,21 @@ pub(crate) fn handle_conn(mut stream: TcpStream, ctx: &ServerCtx) -> Result<(), 
   Ok(())
 }
 
-fn serve_pull_udp(
+fn reject_req(stream: &mut TcpStream, op: Op, status: Status) -> Result<(), PeerError> {
+  if matches!(op, Op::Pull | Op::Push) {
+    let _ = read_frame(stream);
+  }
+  write_resp(stream, &P2pResp::err(status))
+}
+
+fn serve_pull_udp<'a>(
   stream: &mut TcpStream,
   ctx: &ServerCtx,
-  req: &P2pReq,
-  have_bits: &[u8],
-  eff_rate: u64,
-  root_hash: [u8; 16],
-  source: BlockSource<'_>,
+  (req, have_bits): (&P2pReq, &[u8]),
+  (eff_rate, root_hash): (u64, [u8; 16]),
+  source: impl Into<BlockSource<'a>>,
 ) -> Result<(), PeerError> {
+  let source = source.into();
   let total = source.total_blocks();
   let (mut blk_lo, mut blk_hi) = req
     .range
@@ -467,8 +431,7 @@ fn serve_pull_udp(
     blk_hi = blk_hi.min(r_hi).min(total);
   }
   let (udp_sock, my_udp_addrs) = bind_udp_for_ip(stream.local_addr()?.ip())?;
-  let resp = ctx.ok_resp(eff_rate, root_hash, my_udp_addrs, Vec::new(), Vec::new());
-  write_frame(stream, &resp.encode()?)?;
+  write_resp(stream, &ctx.ok_empty(eff_rate, root_hash, my_udp_addrs))?;
   if blk_lo < blk_hi
     && let Ok(peer_udp) = punch_udp(&udp_sock, &req.peer_addrs, 0)
     && let Some(&first_peer) = peer_udp.first()

@@ -1,7 +1,6 @@
 use std::{
   ffi::OsString,
-  fs::{self, File, OpenOptions},
-  io,
+  fs::{self, File},
   path::{Path, PathBuf},
   sync::atomic::{AtomicU64, Ordering},
 };
@@ -9,8 +8,9 @@ use std::{
 use s0_cdc::{BasisIndex, BlockLoc, CdcConfig, FileAt, Manifest, hash128, match_basis_file};
 
 use super::{
-  FsError, copy_file_spans,
+  FsError, copy_file_spans, create_trunc,
   fd_cache::FdCache,
+  open_rw,
   pack::{SmallPack, UNPACKED_OFFSET},
   prune_dir, remove, sanitize_rel_path,
 };
@@ -81,11 +81,10 @@ impl SharedSink {
         )?;
         if plan.delta_bytes == 0
           && basis_len == e.size
-          && plan.copy_spans.len() <= 1
           && plan
             .copy_spans
             .first()
-            .is_none_or(|s| s.src_off == 0 && s.dst_off == 0)
+            .is_none_or(|s| plan.copy_spans.len() == 1 && s.src_off == 0 && s.dst_off == 0)
         {
           let _ = remove(&tmp_path);
           bit_cursor = base_bit + e.chunks.len();
@@ -104,17 +103,17 @@ impl SharedSink {
         && let Ok(meta) = stage.metadata()
         && meta.len() > 0
       {
-        let (mut bc, slen) = (base_bit, meta.len());
-        let plan = match_basis_file(
+        let mut bc = base_bit;
+        stage_reused = match_basis_file(
           &e.chunks,
-          (&stage, slen),
+          (&stage, meta.len()),
           CdcConfig::DEFAULT,
           (&mut basis_idx, &mut io_buf),
           &mut initial_have_bits,
           &mut bc,
           &mut delta_cursor,
-        )?;
-        stage_reused = plan.reused_bytes;
+        )?
+        .reused_bytes;
       }
       bit_cursor = base_bit + e.chunks.len();
 
@@ -122,7 +121,7 @@ impl SharedSink {
         pack_offsets[ei] = pack_total;
         pack_total += e.size;
       } else if stage_reused > 0 || basis_hit.is_some() {
-        let tmp_file = Self::open_rw(&tmp_path, stage_reused == 0, e.size)?;
+        let tmp_file = open_rw(&tmp_path, stage_reused == 0, e.size)?;
         if let Some((basis, plan)) = basis_hit {
           copy_file_spans(&basis, &tmp_file, &plan.copy_spans, &mut io_buf)?;
         }
@@ -137,11 +136,9 @@ impl SharedSink {
     let small_pack = SmallPack::create(root, pack_total)?;
     let have_words = (0..word_cnt)
       .map(|w_idx| {
-        let mut bytes = [0u8; 8];
-        if let Some(sub) = initial_have_bits.get(w_idx * 8..) {
-          let n = sub.len().min(8);
-          bytes[..n].copy_from_slice(&sub[..n]);
-        }
+        let (mut bytes, sub) = ([0u8; 8], &initial_have_bits[w_idx * 8..]);
+        let n = sub.len().min(8);
+        bytes[..n].copy_from_slice(&sub[..n]);
         AtomicU64::new(u64::from_le_bytes(bytes))
       })
       .collect();
@@ -158,19 +155,6 @@ impl SharedSink {
       have_words,
       initial_have_bits,
     })
-  }
-
-  fn open_rw(path: &Path, truncate: bool, min_len: u64) -> io::Result<File> {
-    let f = OpenOptions::new()
-      .create(true)
-      .truncate(truncate)
-      .read(true)
-      .write(true)
-      .open(path)?;
-    if truncate || f.metadata().map_or(true, |m| m.len() < min_len) {
-      f.set_len(min_len)?;
-    }
-    Ok(f)
   }
 
   /// 生成目标文件的同目录暂存文件路径 `.s0_stage.<filename>`
@@ -310,7 +294,7 @@ impl SharedSink {
       let tmp = Self::tmp_path_for(&self.root.join(&e.path));
       let f = self
         .staging_fds
-        .get_or_open(loc.entry_idx, || Self::open_rw(&tmp, false, e.size))?;
+        .get_or_open(loc.entry_idx, || open_rw(&tmp, false, e.size))?;
       f.write_all_at_pos(data, loc.offset)?;
     }
     let bit = 1u64 << (block_idx & 63);
@@ -382,15 +366,17 @@ impl SharedSink {
     let (mut written, mut blk_buf) = (0usize, Vec::new());
     while written < max_avail && c_idx < e.chunks.len() {
       let (c, blk_idx) = (&e.chunks[c_idx], entry_blk_base + (c_idx as u32));
-      let clen = c.len as usize;
-      let in_off = (file_offset + (written as u64) - c.offset) as usize;
+      let (clen, in_off) = (
+        c.len as usize,
+        (file_offset + (written as u64) - c.offset) as usize,
+      );
       let to_copy = (max_avail - written).min(clen.saturating_sub(in_off));
+      let dst_slice = &mut dst[written..written + to_copy];
       if in_off == 0 && to_copy == clen {
-        let loc = self.block_map[blk_idx as usize];
-        self.read_verified_loc_into(blk_idx, loc, &mut dst[written..written + to_copy])?;
+        self.read_verified_loc_into(blk_idx, self.block_map[blk_idx as usize], dst_slice)?;
       } else {
         self.read_verified_block(blk_idx, &mut blk_buf)?;
-        dst[written..written + to_copy].copy_from_slice(&blk_buf[in_off..in_off + to_copy]);
+        dst_slice.copy_from_slice(&blk_buf[in_off..in_off + to_copy]);
       }
       written += to_copy;
       c_idx += 1;
@@ -421,7 +407,7 @@ impl SharedSink {
         if let Some(parent) = final_path.parent() {
           fs::create_dir_all(parent)?;
         }
-        cur_file = Some(Self::open_rw(&final_path, false, e.size)?);
+        cur_file = Some(open_rw(&final_path, false, e.size)?);
       }
       if let Some(ref f) = cur_file {
         f.write_all_at_pos(&buf, loc.offset)?;
@@ -458,16 +444,9 @@ impl SharedSink {
         keep_paths.push(clean_rel);
       }
       if e.size == 0 {
-        if let Some(parent) = final_path.parent() {
-          fs::create_dir_all(parent)?;
-        }
-        File::create(&final_path)?;
-      } else if self.needs_staging.get(ei).copied().unwrap_or(false) {
-        let pack_off = self
-          .pack_offsets
-          .get(ei)
-          .copied()
-          .unwrap_or(UNPACKED_OFFSET);
+        create_trunc(&final_path)?;
+      } else if self.needs_staging[ei] {
+        let pack_off = self.pack_offsets[ei];
         if pack_off != UNPACKED_OFFSET {
           pack_jobs.push((final_path, pack_off, e.size as u32));
         } else {

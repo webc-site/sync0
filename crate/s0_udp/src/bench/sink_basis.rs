@@ -1,13 +1,20 @@
 use std::{
-  fs::{File, OpenOptions},
+  fs::File,
   path::{Path, PathBuf},
   thread,
 };
 
 use s0_cdc::{BasisIndex, CdcConfig, FileAt, hash128};
 
-use super::{BLK, RootBuf, ZSTD_LEVEL, manifest::Entry, now_us, par_chunk_plan, sink::Sink};
-use crate::{Receiver, UdpError, codec::Codec, fs::scan_files};
+use super::{
+  MAX_BLOCK, RootBuf, ZSTD_DEFAULT_LEVEL, manifest::Entry, now_us, par_chunk_plan, sink::Sink,
+};
+use crate::{
+  Receiver, UdpError,
+  codec::Codec,
+  compio_io::flush_memory_slices_compio,
+  fs::{create_trunc, run_par_chunks, scan_files},
+};
 
 /// 目录内跨文件去重扫描的基准总字节上限（128 MiB）
 const MAX_DIR_BASIS_BYTES: u64 = 128 << 20;
@@ -24,16 +31,6 @@ pub(super) struct TargetFile {
   pub(super) size: u64,
   pub(super) rem: u64,
   pub(super) created: bool,
-}
-
-pub(super) fn create_trunc(path: &Path) -> Result<File, UdpError> {
-  Ok(
-    OpenOptions::new()
-      .create(true)
-      .truncate(true)
-      .write(true)
-      .open(path)?,
-  )
 }
 
 pub(super) fn open_nonempty_basis(path: &Path) -> Option<(File, u64)> {
@@ -118,36 +115,24 @@ pub(super) fn flush_small_writes(
   writes: &[(usize, u32, u32)],
   buf: &[u8],
 ) -> Result<(), UdpError> {
-  if writes.len() < 16 {
-    for &(idx, off, len) in writes {
-      let s = &buf[off as usize..(off + len) as usize];
-      let f = create_trunc(&files[idx].write_path)?;
-      f.write_all_at_pos(s, 0)?;
+  Ok(run_par_chunks(writes, |slice| {
+    if flush_memory_slices_compio(slice.len(), |i| {
+      let (idx, off, len) = slice[i];
+      (
+        files[idx].write_path.as_path(),
+        &buf[off as usize..(off + len) as usize],
+      )
+    })
+    .is_ok()
+    {
+      return Ok(());
     }
-    return Ok(());
-  }
-  let (n_threads, chunk_len) = par_chunk_plan(writes.len());
-  let res: Vec<Result<(), UdpError>> = thread::scope(|s| {
-    let mut handles = Vec::with_capacity(n_threads);
-    for slice in writes.chunks(chunk_len) {
-      handles.push(s.spawn(move || {
-        for &(idx, off, len) in slice {
-          let data = &buf[off as usize..(off + len) as usize];
-          let f = create_trunc(&files[idx].write_path)?;
-          f.write_all_at_pos(data, 0)?;
-        }
-        Ok(())
-      }));
+    for &(idx, off, len) in slice {
+      let data = &buf[off as usize..(off + len) as usize];
+      create_trunc(&files[idx].write_path)?.write_all_at_pos(data, 0)?;
     }
-    handles
-      .into_iter()
-      .map(|h| h.join().unwrap_or(Err(UdpError::Corrupt)))
-      .collect()
-  });
-  for r in res {
-    r?;
-  }
-  Ok(())
+    Ok(())
+  })?)
 }
 
 pub(super) fn build_dir_basis(
@@ -224,12 +209,12 @@ impl Dec {
     let Some(data) = recv.data(blk) else {
       return Ok(());
     };
-    let off = u64::from(blk) * BLK as u64;
+    let off = u64::from(blk) * MAX_BLOCK as u64;
     if zstd {
-      let raw_len = total.saturating_sub(off).min(BLK as u64) as usize;
+      let raw_len = total.saturating_sub(off).min(MAX_BLOCK as u64) as usize;
       let c = match &mut self.codec {
         Some(c) => c,
-        None => self.codec.insert(Codec::new(ZSTD_LEVEL)?),
+        None => self.codec.insert(Codec::new(ZSTD_DEFAULT_LEVEL)?),
       };
       self.out.resize(raw_len, 0);
       let t0 = now_us();

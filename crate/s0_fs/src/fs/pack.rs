@@ -1,16 +1,15 @@
 use std::{
   cell::UnsafeCell,
-  fs::{self, File, OpenOptions},
+  fs::{self, File},
   io,
   path::{Path, PathBuf},
   ptr::copy_nonoverlapping,
   slice::from_raw_parts,
-  thread,
 };
 
 use s0_cdc::FileAt;
 
-use super::{FsError, par_chunk_plan};
+use super::{FsError, open_rw, run_par_chunks};
 use crate::compio_io::{flush_memory_slices_compio, flush_pack_stream_compio};
 
 /// 小文件内存聚合池上限（8 MiB）：超过该阈值自动切换为单文件流 `.s0_pack.tmp` 顺序/偏移写入，彻底杜绝内存爆炸
@@ -70,13 +69,7 @@ impl SmallPack {
       return Ok(Self::Mem(DisjointArena::new(total_bytes as usize)));
     }
     let path = root.join(".s0_pack.tmp");
-    let file = OpenOptions::new()
-      .create(true)
-      .truncate(true)
-      .read(true)
-      .write(true)
-      .open(&path)?;
-    file.set_len(total_bytes)?;
+    let file = open_rw(&path, true, total_bytes)?;
     Ok(Self::StreamFile { file, path })
   }
 
@@ -112,25 +105,25 @@ impl SmallPack {
     match self {
       Self::Empty => {}
       Self::Mem(arena) => {
-        run_pack_workers(pack_jobs, |slice| {
+        run_par_chunks(pack_jobs, |slice| {
           if flush_memory_slices_compio(slice.len(), |i| {
             let (ref path, off, len) = slice[i];
-            let bytes = unsafe { arena.slice_at(off as usize, len as usize) };
-            (path.clone(), bytes.to_vec())
+            (path.as_path(), unsafe {
+              arena.slice_at(off as usize, len as usize)
+            })
           })
           .is_ok()
           {
             return Ok(());
           }
           for &(ref path, off, len) in slice {
-            let bytes = unsafe { arena.slice_at(off as usize, len as usize) };
-            fs::write(path, bytes)?;
+            fs::write(path, unsafe { arena.slice_at(off as usize, len as usize) })?;
           }
           Ok(())
         })?;
       }
       Self::StreamFile { file, path } => {
-        run_pack_workers(pack_jobs, |slice| {
+        run_par_chunks(pack_jobs, |slice| {
           if flush_pack_stream_compio(path, slice).is_ok() {
             return Ok(());
           }
@@ -153,36 +146,4 @@ impl SmallPack {
       let _ = fs::remove_file(path);
     }
   }
-}
-
-fn run_pack_workers<F>(jobs: &[(PathBuf, u64, u32)], flush_chunk: F) -> Result<(), FsError>
-where
-  F: Fn(&[(PathBuf, u64, u32)]) -> io::Result<()> + Sync,
-{
-  let (workers, chunk_sz) = par_chunk_plan(jobs.len());
-  if workers <= 1 {
-    flush_chunk(jobs)?;
-    return Ok(());
-  }
-  let mut first_err: Option<io::Error> = None;
-  thread::scope(|s| {
-    let mut handles = Vec::with_capacity(workers);
-    for slice in jobs.chunks(chunk_sz) {
-      handles.push(s.spawn(|| flush_chunk(slice)));
-    }
-    for h in handles {
-      match h.join() {
-        Ok(Ok(())) => {}
-        Ok(Err(e)) if first_err.is_none() => first_err = Some(e),
-        Err(_) if first_err.is_none() => {
-          first_err = Some(io::Error::other("small file pack flush worker panic"));
-        }
-        _ => {}
-      }
-    }
-  });
-  if let Some(e) = first_err {
-    return Err(FsError::Io(e));
-  }
-  Ok(())
 }

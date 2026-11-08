@@ -36,7 +36,7 @@ pub struct NtPeerGrant {
 }
 
 /// 分享组 `.nt` 配置解析结果
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NtGroupSpec {
   pub name: String,
   pub root: PathBuf,
@@ -62,27 +62,15 @@ pub fn parse_nt_groups(text: &str, base_dir: Option<&Path>) -> Result<Vec<NtGrou
     return Ok(Vec::new());
   };
 
-  let mut users_dir_path: Option<PathBuf> = None;
-  for (k, v) in root_pairs {
-    if matches!(k.as_str(), "users_dir" | "user_dir")
-      && let Some(dir_str) = v.as_str()
-    {
-      users_dir_path = Some(resolve_users_dir(dir_str, base_dir));
-    }
-  }
-  if users_dir_path.is_none()
-    && let Some(base) = base_dir
-  {
-    let def_users = base.join("users");
-    if def_users.is_dir() {
-      users_dir_path = Some(def_users);
-    }
-  }
-
-  let dir_users = if let Some(ref udir) = users_dir_path {
-    load_users_nt_dir(udir)?
-  } else {
-    Vec::new()
+  let users_dir_path = root_pairs
+    .iter()
+    .find(|(k, _)| matches!(k.as_str(), "users_dir" | "user_dir"))
+    .and_then(|(_, v)| v.as_str())
+    .map(|s| resolve_users_dir(s, base_dir))
+    .or_else(|| base_dir.map(|b| b.join("users")).filter(|p| p.is_dir()));
+  let dir_users = match users_dir_path {
+    Some(ref udir) => load_users_nt_dir(udir)?,
+    None => Vec::new(),
   };
 
   let group_pairs: &[(String, Value)] = if let Some(gval) = root_val.get("groups")
@@ -109,14 +97,7 @@ pub fn parse_nt_groups(text: &str, base_dir: Option<&Path>) -> Result<Vec<NtGrou
 
     let mut spec = NtGroupSpec {
       name: name.to_owned(),
-      root: PathBuf::new(),
-      auth_required: false,
-      default_perm: None,
-      default_max_rate: 0,
-      default_write_prefixes: Vec::new(),
-      ro_secret: None,
-      rw_secret: None,
-      grants: Vec::new(),
+      ..Default::default()
     };
     let mut explicit_users = false;
 
@@ -128,26 +109,19 @@ pub fn parse_nt_groups(text: &str, base_dir: Option<&Path>) -> Result<Vec<NtGrou
             spec.root = PathBuf::from(s);
           }
         }
-        "auth" => {
-          if let Some(s) = s {
-            spec.auth_required = matches!(s, "true" | "1" | "yes");
-          }
-        }
+        "auth" => spec.auth_required = s.is_some_and(|s| matches!(s, "true" | "1" | "yes")),
         "perm" | "default_perm" => spec.default_perm = s.map(str::to_owned),
         "rate" | "default_rate" => {
-          if let Some(r) = s.and_then(parse_rate) {
-            spec.default_max_rate = r;
-          }
+          spec.default_max_rate = s.and_then(parse_rate).unwrap_or(spec.default_max_rate)
         }
         "write_prefix" | "default_write_prefix" => {
-          spec.default_write_prefixes = parse_nt_prefixes(v);
+          spec.default_write_prefixes = parse_nt_prefixes(v)
         }
         "ro_secret" => spec.ro_secret = s.map(str::to_owned),
         "rw_secret" => spec.rw_secret = s.map(str::to_owned),
         "users_dir" | "user_dir" => {
           if let Some(dir_str) = s {
-            let resolved = resolve_users_dir(dir_str, base_dir);
-            for (_, uspec) in load_users_nt_dir(&resolved)? {
+            for (_, uspec) in load_users_nt_dir(&resolve_users_dir(dir_str, base_dir))? {
               apply_user_spec_to_group(&mut spec, &uspec, name, true);
             }
           }
@@ -293,15 +267,9 @@ fn parse_user_nt_value(stem: &str, val: &Value) -> NtUserSpec {
     for (k, v) in pairs {
       match k.as_str() {
         "id" | "ids" | "iroh" | "pub" | "pubkey" => parse_nt_ids(v, &mut spec.ids),
-        "perm" | "default_perm" => {
-          spec.perm = v.as_str().map(|s| s.trim().to_owned());
-        }
-        "rate" | "max_rate" | "default_rate" => {
-          spec.rate = v.as_str().and_then(parse_rate);
-        }
-        "write_prefix" | "write_prefixes" => {
-          spec.write_prefixes = parse_nt_prefixes(v);
-        }
+        "perm" | "default_perm" => spec.perm = v.as_str().map(|s| s.trim().to_owned()),
+        "rate" | "max_rate" | "default_rate" => spec.rate = v.as_str().and_then(parse_rate),
+        "write_prefix" | "write_prefixes" => spec.write_prefixes = parse_nt_prefixes(v),
         "groups" => match v {
           Value::Dict(gpairs) => {
             for (gname, gval) in gpairs {
@@ -438,23 +406,23 @@ fn apply_nt_users_list(
           )
         {
           let uname = pairs[0].0.trim();
-          let rule = parse_group_rule(&pairs[0].1);
-          if let Some((_, uspec)) = dir_users.iter().find(|(u, _)| u == uname) {
+          let r = parse_group_rule(&pairs[0].1);
+          if let Some((_, u)) = dir_users.iter().find(|(u, _)| u == uname) {
             grant_user_with_rule(
               spec,
-              uspec,
-              rule.perm.as_deref(),
-              rule.rate,
-              rule.write_prefixes.as_deref(),
+              u,
+              r.perm.as_deref(),
+              r.rate,
+              r.write_prefixes.as_deref(),
             );
           } else if !uname.is_empty() {
             upsert_grant(
               spec,
               NtPeerGrant {
                 id: uname.to_owned(),
-                perm: rule.perm.or_else(|| spec.default_perm.clone()),
-                rate: rule.rate.unwrap_or(0),
-                write_prefixes: rule.write_prefixes.unwrap_or_default(),
+                perm: r.perm.or_else(|| spec.default_perm.clone()),
+                rate: r.rate.unwrap_or(0),
+                write_prefixes: r.write_prefixes.unwrap_or_default(),
               },
             );
           }

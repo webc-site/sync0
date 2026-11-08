@@ -11,11 +11,8 @@ use s0_cc::Cc;
 use s0_cdc::{CdcConfig, chunk_file};
 
 use super::{
-  BLK, DGRAM, FIN_MAGIC, PKT, Role, RootBuf, TUNNEL_PKT, WINDOW_BLOCKS,
-  manifest::{
-    Entry, ManifestMode, encode_manifest, entries_from_changes, entries_from_scanned, scan_dir,
-    send_manifest,
-  },
+  DEFAULT_PKT, FIN_MAGIC, MAX_BLOCK, MAX_DATAGRAM, Role, RootBuf, TUNNEL_PKT, WINDOW_BLOCKS,
+  manifest::{Entry, ManifestMode, encode_manifest, entries_from_changes, scan_dir, send_manifest},
   now_us, send_udp,
   source::{Src, SrcKind, build_tx_spans},
   stats::{Stats, done_bytes},
@@ -126,21 +123,7 @@ pub fn send_files(
   rate: u64,
   show: bool,
 ) -> Result<Stats, UdpError> {
-  let (entries, arena, logical_total) = entries_from_scanned(root, files)?;
-  send_inner(
-    SendPlan {
-      input: SrcInput::Dir(RootBuf::new(root), entries, arena),
-      logical_total,
-      skip_all: false,
-      mode: ManifestMode {
-        delete: false,
-        partial: true,
-      },
-    },
-    peer,
-    rate,
-    show,
-  )
+  send_changes(root, files, Vec::new(), peer, rate, show)
 }
 
 /// 发送目录下指定的增量变更批次
@@ -153,7 +136,10 @@ pub fn send_changes(
   show: bool,
 ) -> Result<Stats, UdpError> {
   let (entries, arena, logical_total) = entries_from_changes(root, files, removed)?;
-  send_inner(
+  let bind_addr = if peer.is_ipv4() { BIND_V4 } else { BIND_V6 };
+  let sock = bind_std_udp(bind_addr, false)?;
+  send_inner_sock(
+    &sock,
     SendPlan {
       input: SrcInput::Dir(RootBuf::new(root), entries, arena),
       logical_total,
@@ -167,12 +153,6 @@ pub fn send_changes(
     rate,
     show,
   )
-}
-
-fn send_inner(plan: SendPlan, peer: SocketAddr, rate: u64, show: bool) -> Result<Stats, UdpError> {
-  let bind_addr = if peer.is_ipv4() { BIND_V4 } else { BIND_V6 };
-  let sock = bind_std_udp(bind_addr, false)?;
-  send_inner_sock(&sock, plan, peer, rate, show)
 }
 
 fn send_inner_sock(
@@ -195,12 +175,12 @@ fn send_inner_sock(
   let m = encode_manifest(&entries, mode)?;
   let (full_spans, full_total) = build_tx_spans(&entries, &[]);
   let full_nblk =
-    u32::try_from(full_total.div_ceil(BLK as u64)).map_err(|_| UdpError::Arg("文件过大"))?;
+    u32::try_from(full_total.div_ceil(MAX_BLOCK as u64)).map_err(|_| UdpError::Arg("文件过大"))?;
   let is_loop = peer.ip().is_loopback();
   let init_pkt = if is_tunnel_path(sock, peer) && var_os("S0_FORCE_1200").is_some() {
     TUNNEL_PKT
   } else {
-    PKT
+    DEFAULT_PKT
   };
   let mut src = Src::new(kind, entries, full_spans, full_total, skip_all, init_pkt)?;
   if is_loop {
@@ -224,7 +204,8 @@ fn send_inner_sock(
   } else {
     src.rebuild_spans(&have_bits)
   };
-  let nblk = u32::try_from(total.div_ceil(BLK as u64)).map_err(|_| UdpError::Arg("文件过大"))?;
+  let nblk =
+    u32::try_from(total.div_ceil(MAX_BLOCK as u64)).map_err(|_| UdpError::Arg("文件过大"))?;
   let mut bar = show.then(|| Progress::new(Role::Send, total));
   let fin_le = FIN_MAGIC.to_le_bytes();
 
@@ -255,9 +236,9 @@ fn send_inner_sock(
     peer,
     src,
     pkt_size: init_pkt,
-    pkt_buf: [0u8; DGRAM],
+    pkt_buf: [0u8; MAX_DATAGRAM],
     done_lo: 0,
-    credit: 512,
+    credit: WINDOW_BLOCKS,
     first_send_us: start_dbg,
     last_ack: start_dbg,
     got_ack: false,
@@ -273,13 +254,9 @@ fn send_inner_sock(
   };
 
   let no_rack = var_os("S0_NO_RACK").is_some();
-  let mut next_send = start_dbg;
-  let mut next_blk = 0u32;
-  let mut small_dup_done = false;
-  let mut last_stall = start_dbg;
-  let mut buf = [0u8; DGRAM];
-  let mut last_done_lo = 0u32;
-  let mut last_progress = start_dbg;
+  let (mut next_send, mut next_blk, mut small_dup_done) = (start_dbg, 0u32, false);
+  let (mut last_stall, mut last_done_lo, mut last_progress) = (start_dbg, 0u32, start_dbg);
+  let mut buf = [0u8; MAX_DATAGRAM];
 
   loop {
     tx.drain_acks(&mut buf, no_rack)?;

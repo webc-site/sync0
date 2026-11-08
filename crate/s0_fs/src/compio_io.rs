@@ -1,4 +1,6 @@
 use std::{
+  cell::OnceCell,
+  future::Future,
   io,
   net::SocketAddr,
   path::{Path, PathBuf},
@@ -21,13 +23,27 @@ use crate::FsError;
 /// 单线程 `compio` 异步完成流并发度上限（控制同时在飞的 `io_uring`/`kqueue`/`IOCP` 文件句柄数，防 FD 耗尽与内存爆炸）
 const COMPIO_BATCH_CONCURRENCY: usize = 32;
 
+thread_local! {
+  static LOCAL_RT: OnceCell<Runtime> = const { OnceCell::new() };
+}
+
+/// 在线程局部 `compio` Runtime 上执行异步 I/O 任务（每线程仅创建一次 `io_uring` / `kqueue` / `IOCP` 实例）
+pub fn run_compio<T, F: Future<Output = io::Result<T>>>(fut: F) -> io::Result<T> {
+  LOCAL_RT.with(|cell| {
+    if let Some(rt) = cell.get() {
+      return rt.block_on(fut);
+    }
+    let rt = Runtime::new()?;
+    cell.get_or_init(|| rt).block_on(fut)
+  })
+}
+
 /// 利用 `compio` 异步 `ReadAt` (`pread` / `io_uring`) 在指定文件偏移处精确读取 `len` 字节
 pub fn read_exact_at_compio(path: &Path, offset: u64, len: usize) -> io::Result<Vec<u8>> {
   if len == 0 {
     return Ok(Vec::new());
   }
-  let rt = Runtime::new()?;
-  rt.block_on(async move {
+  run_compio(async move {
     let file = OpenOptions::new().read(true).open(path).await?;
     let buf = Vec::with_capacity(len);
     let compio::BufResult(res, slice_buf) = file.read_exact_at(buf.slice(..len), offset).await;
@@ -43,8 +59,7 @@ pub fn write_all_at_compio(
   data: Vec<u8>,
   truncate: bool,
 ) -> io::Result<()> {
-  let rt = Runtime::new()?;
-  rt.block_on(async move {
+  run_compio(async move {
     let mut file = OpenOptions::new()
       .create(true)
       .truncate(truncate)
@@ -56,29 +71,32 @@ pub fn write_all_at_compio(
   })
 }
 
-/// 利用 `compio` 跨平台完成式异步 I/O (`io_uring` / `kqueue` / `IOCP`) 批量并发创建并定位写入 (`WriteAt`) 小文件切片
-pub fn flush_memory_slices_compio<F>(count: usize, get_item: F) -> io::Result<()>
+/// 利用 `compio` 跨平台完成式异步 I/O (`io_uring` / `kqueue` / `IOCP`) 批量并发创建并定位写入 (`WriteAt`) 小文件切片，全程复用单块缓冲区
+pub fn flush_memory_slices_compio<'a, F>(count: usize, get_item: F) -> io::Result<()>
 where
-  F: Fn(usize) -> (PathBuf, Vec<u8>),
+  F: Fn(usize) -> (&'a Path, &'a [u8]),
 {
   if count == 0 {
     return Ok(());
   }
-  let rt = Runtime::new()?;
-  rt.block_on(async move {
+  run_compio(async move {
+    let mut reusable_buf = Vec::with_capacity(64 * 1024);
     let mut idx = 0usize;
     while idx < count {
       let end = (idx + COMPIO_BATCH_CONCURRENCY).min(count);
       for i in idx..end {
         let (path, data) = get_item(i);
+        reusable_buf.clear();
+        reusable_buf.extend_from_slice(data);
         let mut file = OpenOptions::new()
           .create(true)
           .truncate(true)
           .write(true)
           .open(path)
           .await?;
-        let compio::BufResult(res, _) = file.write_all_at(data, 0).await;
+        let compio::BufResult(res, returned_buf) = file.write_all_at(reusable_buf, 0).await;
         res?;
+        reusable_buf = returned_buf;
       }
       idx = end;
     }
@@ -91,8 +109,7 @@ pub fn flush_pack_stream_compio(pack_path: &Path, jobs: &[(PathBuf, u64, u32)]) 
   if jobs.is_empty() {
     return Ok(());
   }
-  let rt = Runtime::new()?;
-  rt.block_on(async move {
+  run_compio(async move {
     let pack_file = OpenOptions::new().read(true).open(pack_path).await?;
     let mut reusable_buf = Vec::with_capacity(64 * 1024);
     for &(ref dst_path, off, len) in jobs {

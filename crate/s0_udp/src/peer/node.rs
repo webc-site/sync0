@@ -18,7 +18,7 @@ use s0_conf::ConfError;
 use super::{
   KeyMode, NodeConfig, PeerId, ShareConfig, TransferOpts, derive_share_id, encode_id_b64,
   encode_iroh_addrs_b64,
-  pull::{connect_ctrl_addrs, read_frame, write_frame},
+  pull::{connect_ctrl_addrs, send_req_recv_resp},
   register_iroh_endpoints, resolve_iroh_endpoints,
   server::{ServerCtx, ShareState, SwarmSeedRecord, handle_conn},
 };
@@ -286,9 +286,7 @@ impl PeerNode {
       byte_range: None,
     };
     let mut stream = self.connect_peer(&peer_id)?;
-    write_frame(&mut stream, &req.encode()?)?;
-    let resp_raw = read_frame(&mut stream)?;
-    let resp = P2pResp::decode(&resp_raw)?;
+    let resp = send_req_recv_resp(&mut stream, &req)?;
     self.ingest_resp_profiles(&resp, true);
     if resp.status != Status::Ok {
       return Err(PeerError::RemoteStatus(resp.status));
@@ -336,9 +334,7 @@ impl PeerNode {
       token: opts.token,
       byte_range: opts.byte_range,
     };
-    write_frame(&mut stream, &req.encode()?)?;
-    let resp_raw = read_frame(&mut stream)?;
-    let resp = P2pResp::decode(&resp_raw)?;
+    let resp = send_req_recv_resp(&mut stream, &req)?;
     self.ingest_resp_profiles(&resp, true);
     if resp.status != Status::Ok {
       return Err(PeerError::RemoteStatus(resp.status));
