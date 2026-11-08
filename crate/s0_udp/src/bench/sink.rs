@@ -11,16 +11,16 @@ use s0_cdc::{
 
 pub(super) use super::sink_basis::Dec;
 use super::{
-  MAX_DATAGRAM, RootBuf,
+  FileSpan, MAX_DATAGRAM, RootBuf, locate_span,
   manifest::{Entry, try_build_final_dir_ack},
   sink_basis::{
     SinglePrecheck, TargetFile, build_dir_basis, check_single_chunk, flush_small_writes,
-    open_nonempty_basis, precheck_single_chunks,
+    precheck_single_chunks,
   },
 };
 use crate::{
   UdpError,
-  fs::{Staging, copy_file_spans, create_trunc, open_rw, prune_dir, remove},
+  fs::{Staging, copy_file_spans, create_trunc, open_nonempty_file, open_rw, prune_dir, remove},
 };
 
 /// 本地基准块拷贝缓冲（256 KiB）
@@ -29,14 +29,6 @@ const COPY_BUF_LEN: usize = 256 * 1024;
 const MAX_SMALL_WRITE_FILE: u64 = 64 * 1024;
 /// 接收端小文件内存聚合缓冲池上限（16 MiB）
 const MAX_SMALL_WRITE_BUF: usize = 16 << 20;
-
-#[derive(Clone, Copy, Debug)]
-struct RxSpan {
-  file_idx: usize,
-  dst_off: u64,
-  delta_off: u64,
-  len: u64,
-}
 
 struct PendingCopy {
   basis_file: Option<File>,
@@ -50,7 +42,7 @@ struct PendingCopy {
 pub(super) struct Sink {
   out_root: PathBuf,
   files: Vec<TargetFile>,
-  spans: Vec<RxSpan>,
+  spans: Vec<FileSpan>,
   span_hint: usize,
   pending_copies: Vec<PendingCopy>,
   pool_paths: Vec<PathBuf>,
@@ -90,9 +82,9 @@ impl Sink {
       created,
     });
     for d in data_spans {
-      self.spans.push(RxSpan {
-        file_idx,
-        dst_off: d.file_off,
+      self.spans.push(FileSpan {
+        idx: file_idx,
+        file_off: d.file_off,
         delta_off: d.delta_off,
         len: d.len,
       });
@@ -248,7 +240,7 @@ impl Sink {
         continue;
       }
       if bit_cursor.saturating_add(e.chunks.len()) <= max_bits {
-        let mut basis_opt = open_nonempty_basis(target);
+        let mut basis_opt = open_nonempty_file(target);
         let pre = match prechecked.get(idx).copied() {
           Some(p) => p,
           None if e.chunks.len() == 1 => match &basis_opt {
@@ -347,22 +339,7 @@ impl Sink {
 
   pub(super) fn write(&mut self, data: &[u8], off: u64) -> Result<(), UdpError> {
     let end = off + data.len() as u64;
-    let start = if let Some(sp) = self.spans.get(self.span_hint)
-      && sp.delta_off <= off
-      && (self.span_hint == 0
-        || self.spans[self.span_hint - 1].delta_off + self.spans[self.span_hint - 1].len <= off)
-    {
-      let mut idx = self.span_hint;
-      while idx < self.spans.len() && self.spans[idx].delta_off + self.spans[idx].len <= off {
-        idx += 1;
-      }
-      idx
-    } else {
-      self
-        .spans
-        .partition_point(|sp| sp.delta_off + sp.len <= off)
-    };
-    self.span_hint = start;
+    let start = locate_span(&self.spans, &mut self.span_hint, off);
     for (i, sp) in self.spans[start..].iter().enumerate() {
       if sp.delta_off >= end {
         break;
@@ -377,8 +354,8 @@ impl Sink {
       if t > s {
         let len = t - s;
         let slice = &data[(s - off) as usize..(t - off) as usize];
-        let file_off = sp.dst_off + (s - sp.delta_off);
-        let idx = sp.file_idx;
+        let file_off = sp.file_off + (s - sp.delta_off);
+        let idx = sp.idx;
         let tf = &mut self.files[idx];
         tf.rem = tf.rem.saturating_sub(len);
         if !tf.created && file_off == 0 && len == tf.size {

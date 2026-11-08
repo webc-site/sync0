@@ -3,7 +3,8 @@ use std::fs::File;
 use s0_cdc::{FileAt, for_each_missing_data_span};
 
 use super::{
-  EMPTY, MAX_BLOCK, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_DEFAULT_LEVEL, manifest::Entry, now_us,
+  EMPTY, FileSpan, MAX_BLOCK, MAX_CNT, RootBuf, WINDOW_BLOCKS, ZSTD_DEFAULT_LEVEL, locate_span,
+  manifest::Entry, now_us,
 };
 use crate::{
   UdpError,
@@ -29,24 +30,15 @@ pub(super) struct Blk {
   pub(super) last_retx: [u64; MAX_CNT],
 }
 
-/// 发送端需传输的连续文件片段（跳过接收端已命中的 CDC 块）
-#[derive(Clone, Copy, Debug)]
-pub(super) struct TxSpan {
-  pub(super) entry_idx: usize,
-  pub(super) file_off: u64,
-  pub(super) delta_off: u64,
-  pub(super) len: u64,
-}
-
 /// 根据清单与接收端 `have_bits` 构建缺失数据的发送区间表与需传总字节数
-pub(super) fn build_tx_spans(entries: &[Entry], have_bits: &[u8]) -> (Vec<TxSpan>, u64) {
+pub(super) fn build_tx_spans(entries: &[Entry], have_bits: &[u8]) -> (Vec<FileSpan>, u64) {
   if have_bits.is_empty() {
     let mut spans = Vec::with_capacity(entries.len());
     let mut delta_total = 0u64;
-    for (entry_idx, e) in entries.iter().enumerate() {
+    for (idx, e) in entries.iter().enumerate() {
       if !e.del && e.size > 0 {
-        spans.push(TxSpan {
-          entry_idx,
+        spans.push(FileSpan {
+          idx,
           file_off: 0,
           delta_off: delta_total,
           len: e.size,
@@ -63,15 +55,15 @@ pub(super) fn build_tx_spans(entries: &[Entry], have_bits: &[u8]) -> (Vec<TxSpan
   let mut spans = Vec::with_capacity(entries.len());
   let mut bit_cursor = 0usize;
   let mut delta_total = 0u64;
-  for (entry_idx, e) in entries.iter().enumerate() {
+  for (idx, e) in entries.iter().enumerate() {
     for_each_missing_data_span(
       &e.chunks,
       have_bits,
       &mut bit_cursor,
       &mut delta_total,
       |s| {
-        spans.push(TxSpan {
-          entry_idx,
+        spans.push(FileSpan {
+          idx,
           file_off: s.file_off,
           delta_off: s.delta_off,
           len: s.len,
@@ -86,7 +78,7 @@ pub(super) fn build_tx_spans(entries: &[Entry], have_bits: &[u8]) -> (Vec<TxSpan
 pub(super) struct Src {
   kind: SrcKind,
   entries: Vec<Entry>,
-  spans: Vec<TxSpan>,
+  spans: Vec<FileSpan>,
   span_hint: usize,
   total: u64,
   pkt_size: usize,
@@ -107,7 +99,7 @@ impl Src {
   pub(super) fn new(
     kind: SrcKind,
     entries: Vec<Entry>,
-    spans: Vec<TxSpan>,
+    spans: Vec<FileSpan>,
     total: u64,
     skip_all: bool,
     pkt_size: usize,
@@ -182,7 +174,7 @@ impl Src {
   fn read_into(
     kind: &mut SrcKind,
     entries: &[Entry],
-    spans: &[TxSpan],
+    spans: &[FileSpan],
     span_hint: &mut usize,
     open: &mut Option<(usize, File)>,
     raw: &mut [u8],
@@ -193,19 +185,7 @@ impl Src {
     let mut done = 0usize;
     let mut all_skip_ext = matches!(kind, SrcKind::Dir(..));
     let mut entered_compressible = false;
-    let start = if let Some(sp) = spans.get(*span_hint)
-      && sp.delta_off <= off
-      && (*span_hint == 0 || spans[*span_hint - 1].delta_off + spans[*span_hint - 1].len <= off)
-    {
-      let mut idx = *span_hint;
-      while idx < spans.len() && spans[idx].delta_off + spans[idx].len <= off {
-        idx += 1;
-      }
-      idx
-    } else {
-      spans.partition_point(|sp| sp.delta_off + sp.len <= off)
-    };
-    *span_hint = start;
+    let start = locate_span(spans, span_hint, off);
     for (i, sp) in spans[start..].iter().enumerate() {
       if sp.delta_off >= end || done >= len {
         break;
@@ -226,7 +206,7 @@ impl Src {
             f.read_exact_at_pos(chunk, file_off)?;
           }
           SrcKind::Dir(root, arena) => {
-            let idx = sp.entry_idx;
+            let idx = sp.idx;
             let e = &entries[idx];
             if !skip_name(&e.path) {
               all_skip_ext = false;

@@ -14,7 +14,10 @@ use std::{
 
 pub use filter::{IGNORE_FILE, ScannedFile, is_staging, prune_dir, scan_files, scan_files_in};
 use ignore::Error as IgnoreError;
-pub use path::{MAX_PATH, PathErr, Staging, create_trunc, open_rw, rel_path, remove, safe_join};
+pub use path::{
+  MAX_PATH, PathErr, Staging, create_trunc, open_nonempty_file, open_rw, rel_path, remove,
+  safe_join,
+};
 pub use s0_cdc::is_all_have;
 use s0_cdc::{
   CdcConfig, CdcError, ChunkSig, CopySpan, Manifest, ManifestEntry, chunk_file,
