@@ -10,7 +10,7 @@ use s0_cdc::get_bit;
 use super::{
   MAX_NACK_RESEND_BATCH, Pacer, RangeSpec, SUPER_MAX_BYTES, SUPER_MAX_EXTRA, SUPER_SMALL_LIMIT,
   TUNNEL_SEG_PAYLOAD, TX_CACHE_SLOTS, TxCacheSlot, UdpStats, WAN_DEFAULT_RATE_BPS,
-  seg_payload_for_sock,
+  is_valid_ctrl_sid, seg_payload_for_sock,
 };
 use crate::{
   BlockSource, UdpError,
@@ -406,13 +406,7 @@ pub fn send_range_udp<'a>(
           let _ = sock.send_to(&ack, from);
           continue;
         }
-        let valid_sid = match ctrl_buf[0] {
-          PKT_PUNCH => decode_punch(&ctrl_buf[..n]) == Ok(sid24),
-          PKT_NACK => NackPkt::decode(&ctrl_buf[..n]).is_ok_and(|p| p.session_id == sid24),
-          PKT_ACK => AckPkt::decode(&ctrl_buf[..n]).is_ok_and(|p| p.session_id == sid24),
-          _ => false,
-        };
-        if valid_sid {
+        if is_valid_ctrl_sid(&ctrl_buf[..n], sid24) {
           let _ = amp.on_recv(from, n);
           amp.mark_validated();
           ctx.update_peer_addr(from, if ctrl_buf[0] == PKT_PUNCH { n } else { 0 });

@@ -20,15 +20,15 @@ use super::{
 };
 use crate::{
   RangeSpec, UdpError, bind_udp_for_ip,
-  consts::{FLAG_BYTE_RANGE, FLAG_RANGE, HAVE_ALL_ONES, Op, Status, V6_PREFER_MARGIN_US},
+  consts::{
+    FLAG_BYTE_RANGE, FLAG_RANGE, HAVE_ALL_ONES, MAX_CTRL_FRAME_LEN, Op, Status, V6_PREFER_MARGIN_US,
+  },
   fs::SharedSink,
   punch_udp, recv_range_udp,
   region::Region,
   wire::{P2pReq, P2pResp, SwarmPeer, decode_socket_addrs},
 };
 
-/// 单帧控制面消息最大字节数上限（64 MiB，防止恶意帧长度触发 OOM）
-pub(crate) const MAX_CTRL_FRAME_LEN: usize = 64 * 1024 * 1024;
 /// 动态折半抢占 Work-Stealing 的最小剩余块数或字节阈值（低于阈值免抢占以消除握手开销）
 const MIN_STEAL_BLOCKS: u32 = 64;
 const MIN_STEAL_BYTES: u64 = 256 * 1024;
@@ -363,15 +363,10 @@ pub(crate) fn execute_striped_pull(
         break;
       }
       let have = base_job.sink.snapshot_have_bits();
-      let mut min_lo = req_hi;
-      let mut max_hi = req_lo;
+      let (mut min_lo, mut max_hi) = (req_hi, req_lo);
       for_each_missing_span(&have, req_lo, req_hi, |lo, hi| {
-        if lo < min_lo {
-          min_lo = lo;
-        }
-        if hi > max_hi {
-          max_hi = hi;
-        }
+        min_lo = min_lo.min(lo);
+        max_hi = max_hi.max(hi);
       });
       if min_lo < max_hi {
         let conn = reused_conns.lock().remove(&peer.endpoint_id);

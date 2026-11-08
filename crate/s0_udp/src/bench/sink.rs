@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
   UdpError,
-  fs::{Staging, prune_dir, remove},
+  fs::{Staging, copy_file_spans, prune_dir, remove},
 };
 
 /// 本地基准块拷贝缓冲（256 KiB）
@@ -350,16 +350,7 @@ impl Sink {
       let tmp_file = create_trunc(&pc.tmp_path)?;
       tmp_file.set_len(pc.size)?;
       if let Some(basis_file) = &pc.basis_file {
-        for c in &pc.spans {
-          copy_file_span(
-            basis_file,
-            c.src_off,
-            &tmp_file,
-            c.dst_off,
-            c.len,
-            &mut copy_buf,
-          )?;
-        }
+        copy_file_spans(basis_file, &tmp_file, &pc.spans, &mut copy_buf)?;
       } else {
         for c in &pc.spans {
           let src_f = match &cached_pool {

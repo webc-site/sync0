@@ -1,3 +1,4 @@
+pub use s0_cdc::{FLAG_DELETE, FLAG_PARTIAL, MANIFEST_MAGIC};
 use strum::FromRepr;
 
 /// 协议版本号
@@ -42,11 +43,17 @@ pub const FLAG_BYTE_RANGE: u8 = 1 << 5;
 /// 缺失块位图全 1 标记（表示接收方已拥有全部块，0 字节位图负载）
 pub const HAVE_ALL_ONES: u32 = 0xFFFF_FFFF;
 
+/// 单帧控制面消息最大字节数上限（64 MiB，防止恶意帧长度触发 OOM）
+pub const MAX_CTRL_FRAME_LEN: usize = 64 * 1024 * 1024;
+
 /// 原生 UDP 数据包头固定长度（20 字节）
 pub const DATA_HDR_LEN: usize = 20;
 
 /// 默认单包 UDP 分片有效载荷字节数
 pub const DEFAULT_SEG_PAYLOAD: usize = 1380;
+
+/// 隧道/Overlay 网卡（Tailscale / WireGuard / IPv6 最小 MTU 1280）单包有效载荷上限（`1200 + 20 = 1220 <= 1280`）
+pub const TUNNEL_SEG_PAYLOAD: usize = 1200;
 
 /// 单包 UDP 接收缓冲区大小
 pub const MAX_UDP_PKT: usize = 1500;

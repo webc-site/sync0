@@ -1,0 +1,12 @@
+[package]
+name = "s0_codec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+mzstd = "0.2.11"
+phf = { version = "0.14.0", features = ["macros"] }
+s0_wire = { version = "0.1.0", path = "../s0_wire" }
+thiserror = "2.0.21"

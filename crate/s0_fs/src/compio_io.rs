@@ -11,17 +11,52 @@ use compio::{
   net::UdpSocket,
   runtime::Runtime,
 };
-
-use crate::{
-  UdpError,
+use s0_wire::{
   consts::{DATA_HDR_LEN, PKT_ACK, PKT_PUNCH},
   wire::{AckPkt, DataHeader, decode_punch, encode_punch},
 };
 
+use crate::FsError;
+
 /// 单线程 `compio` 异步完成流并发度上限（控制同时在飞的 `io_uring`/`kqueue`/`IOCP` 文件句柄数，防 FD 耗尽与内存爆炸）
 const COMPIO_BATCH_CONCURRENCY: usize = 32;
 
-/// 利用 `compio` 跨平台完成式异步 I/O (`io_uring` / `kqueue` / `IOCP`) 批量并发创建并写入小文件切片
+/// 利用 `compio` 异步 `ReadAt` (`pread` / `io_uring`) 在指定文件偏移处精确读取 `len` 字节
+pub fn read_exact_at_compio(path: &Path, offset: u64, len: usize) -> io::Result<Vec<u8>> {
+  if len == 0 {
+    return Ok(Vec::new());
+  }
+  let rt = Runtime::new()?;
+  rt.block_on(async move {
+    let file = OpenOptions::new().read(true).open(path).await?;
+    let buf = Vec::with_capacity(len);
+    let compio::BufResult(res, slice_buf) = file.read_exact_at(buf.slice(..len), offset).await;
+    res?;
+    Ok(slice_buf.into_inner())
+  })
+}
+
+/// 利用 `compio` 异步 `WriteAt` (`pwrite` / `io_uring`) 在指定文件偏移处写入完整切片
+pub fn write_all_at_compio(
+  path: &Path,
+  offset: u64,
+  data: Vec<u8>,
+  truncate: bool,
+) -> io::Result<()> {
+  let rt = Runtime::new()?;
+  rt.block_on(async move {
+    let mut file = OpenOptions::new()
+      .create(true)
+      .truncate(truncate)
+      .write(true)
+      .open(path)
+      .await?;
+    let compio::BufResult(res, _) = file.write_all_at(data, offset).await;
+    res
+  })
+}
+
+/// 利用 `compio` 跨平台完成式异步 I/O (`io_uring` / `kqueue` / `IOCP`) 批量并发创建并定位写入 (`WriteAt`) 小文件切片
 pub fn flush_memory_slices_compio<F>(count: usize, get_item: F) -> io::Result<()>
 where
   F: Fn(usize) -> (PathBuf, Vec<u8>),
@@ -51,7 +86,7 @@ where
   })
 }
 
-/// 利用 `compio` 异步流从聚合流文件 `.s0_pack.tmp` 按偏移读取并并发解包落盘，全程复用定长缓冲，杜绝内存爆炸
+/// 利用 `compio` 异步 `ReadAt` + `WriteAt` 从聚合流文件 `.s0_pack.tmp` 按偏移读取并批量解包落盘，全程复用定长缓冲，杜绝内存爆炸
 pub fn flush_pack_stream_compio(pack_path: &Path, jobs: &[(PathBuf, u64, u32)]) -> io::Result<()> {
   if jobs.is_empty() {
     return Ok(());
@@ -94,13 +129,13 @@ pub struct CompioBlockSpec {
   pub seg_payload: usize,
 }
 
-/// 基于 `compio` 异步 `File` 与 `UdpSocket` 的零拷贝流式单文件分块发送器（直接从磁盘完成式读取分片并发送 UDP 数据报，内存占用恒定 $O(1)$）
+/// 基于 `compio` 异步 `File` (`ReadAt`) 与 `UdpSocket` 的零拷贝流式单文件分块发送器（直接从磁盘完成式读取分片并发送 UDP 数据报，内存占用恒定 $O(1)$）
 pub async fn stream_file_block_compio(
   sock: &UdpSocket,
   peer: SocketAddr,
   file: &File,
   spec: CompioBlockSpec,
-) -> Result<usize, UdpError> {
+) -> Result<usize, FsError> {
   if spec.block_len == 0 || spec.seg_payload == 0 {
     return Ok(0);
   }
@@ -154,7 +189,7 @@ pub async fn punch_and_verify_compio(
   sock: &UdpSocket,
   peer: SocketAddr,
   session_id: u32,
-) -> Result<SocketAddr, UdpError> {
+) -> Result<SocketAddr, FsError> {
   let sid24 = session_id & 0x00FF_FFFF;
   let pkt = encode_punch(sid24).to_vec();
   let compio::BufResult(res, _) = sock.send_to(pkt, peer).await;
@@ -173,5 +208,8 @@ pub async fn punch_and_verify_compio(
       return Ok(from);
     }
   }
-  Err(UdpError::Corrupt)
+  Err(FsError::Io(io::Error::new(
+    io::ErrorKind::InvalidData,
+    "invalid compio punch/ack packet",
+  )))
 }

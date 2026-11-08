@@ -11,8 +11,6 @@ readme = "../../README.md"
 clap_args = { version = "0.1.9", features = ["macro"] }
 log_init = "0.1.40"
 rusty_alloc_default = "0.1.5"
-s0_cc = { version = "0.1.0", path = "../s0_cc" }
-s0_cdc = { version = "0.1.0", path = "../s0_cdc" }
 s0_conf = { version = "0.1.0", path = "../s0_conf" }
 s0_i18n = { version = "0.1.0", path = "../s0_i18n" }
 s0_udp = { version = "0.1.0", path = "../s0_udp" }

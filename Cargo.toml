@@ -23,7 +23,16 @@ opt-level = 3
 [profile.release.package.s0_cdc]
 opt-level = 3
 
+[profile.release.package.s0_codec]
+opt-level = 3
+
+[profile.release.package.s0_fs]
+opt-level = 3
+
 [profile.release.package.s0_udp]
+opt-level = 3
+
+[profile.release.package.s0_wire]
 opt-level = 3
 
 [profile.release.package.gxhash]
