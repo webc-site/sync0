@@ -1,0 +1,33 @@
+about: Cydamseru ffeiliau cyfoedion-i-cyfoedion ac offer dosbarthu aml-nôd
+send_about: Anfonwch ffeil neu gyfeiriadur
+recv_about: derbyn ffeil neu gyfeiriadur
+id_about: Allbynnu cyfeiriad y nod lleol
+profile_about: Cynhyrchu a llofnodi cardiau busnes nodau personol
+share_about: Cyhoeddi un neu fwy o grwpiau rhannu ffeiliau
+pull_about: Tynnwch y cyfan neu lu o ffeiliau a chyfeiriaduron dethol o'r grŵp rhannu
+push_about: Llwythwch i fyny ffeiliau neu gyfeiriaduron i grŵp rhannu
+sub_about: Tanysgrifiwch i rannu diweddariadau grŵp a chynorthwyo i ddosbarthu
+group_about: Ymunwch â grŵp cydamseru dwy ffordd aml-nôd
+arg_file_or_dir: Ffeil neu gyfeiriadur i'w anfon
+arg_peer_addr: cyfeiriad nod targed
+arg_listen_addr: cyfeiriad gwrando
+arg_out_path: Ffeil allbwn neu lwybr cyfeiriadur
+arg_rate: Terfyn cyfradd (beit/eiliad)
+arg_delete: Dileu ffeiliau diangen ar y diwedd derbyn
+arg_quiet: modd tawel
+arg_share_name: Rhannu grwpiau a llwybrau
+arg_local_dir: cyfeiriadur lleol
+arg_dst_dir: cyfeiriadur targed
+arg_src_dir: llwybr ffynhonnell leol
+arg_peer_addrs_csv: Rhestr o gyfeiriadau nodau (coma wedi'u gwahanu)
+arg_origin_addr: Cyfeiriad nod ffynhonnell
+arg_subpath: Dewis lluosog o lwybrau ffeil neu gyfeiriadur (coma wedi'u gwahanu)
+arg_auth: Galluogi dilysu mynediad
+arg_group_name: Enw'r grŵp a llwybr
+arg_config: Cyfeiriadur allwedd a chyfluniad
+arg_name: enw defnyddiwr
+arg_region: Cod dinas neu ardal
+arg_email: E-bost cyswllt
+arg_url: URL personol
+arg_bio: Llofnod personol (uchafswm o 256 nod)
+err_prefix: camgymeriad

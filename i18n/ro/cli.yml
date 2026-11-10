@@ -1,0 +1,33 @@
+about: Sincronizarea fișierelor peer-to-peer și instrumente de distribuție cu mai multe noduri
+send_about: Trimiteți un fișier sau un director
+recv_about: primiți fișierul sau directorul
+id_about: Ieșiți adresa nodului local
+profile_about: Generați și semnați cărți de vizită cu noduri personale
+share_about: Publicați unul sau mai multe grupuri de partajare a fișierelor
+pull_about: Extrageți toate sau mai multe fișiere și directoare selectate din grupul de partajare
+push_about: Încărcați fișiere sau directoare într-un grup de partajare
+sub_about: Abonați-vă pentru a partaja actualizările grupului și ajutați la distribuire
+group_about: Alăturați-vă unui grup de sincronizare bidirecțională cu mai multe noduri
+arg_file_or_dir: Fișier sau director care urmează să fie trimis
+arg_peer_addr: adresa nodului țintă
+arg_listen_addr: adresa de ascultare
+arg_out_path: Fișierul de ieșire sau calea directorului
+arg_rate: Limită de rată (octeți/secundă)
+arg_delete: Ștergeți fișierele redundante de la capătul receptor
+arg_quiet: modul silențios
+arg_share_name: Partajați grupuri și căi
+arg_local_dir: directorul local
+arg_dst_dir: directorul țintă
+arg_src_dir: calea sursei locale
+arg_peer_addrs_csv: Lista adreselor nodurilor (separate prin virgulă)
+arg_origin_addr: Adresa nodului sursă
+arg_subpath: Selecție multiplă de căi de fișiere sau directoare (separate prin virgulă)
+arg_auth: Activați autentificarea accesului
+arg_group_name: Numele și calea grupului
+arg_config: Cheie și director de configurare
+arg_name: nume de utilizator
+arg_region: Prefix local sau local
+arg_email: E-mail de contact
+arg_url: Adresa URL personală
+arg_bio: Semnătură personalizată (maximum 256 de caractere)
+err_prefix: greşeală

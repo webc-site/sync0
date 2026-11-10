@@ -1,0 +1,33 @@
+about: Peer-to-peer failų sinchronizavimo ir kelių mazgų platinimo įrankiai
+send_about: Siųsti failą arba katalogą
+recv_about: gauti failą ar katalogą
+id_about: Išveskite vietinio mazgo adresą
+profile_about: Generuokite ir pasirašykite asmenines mazgo vizitines korteles
+share_about: Paskelbkite vieną ar daugiau failų bendrinimo grupių
+pull_about: Iš bendrinimo grupės ištraukite visus arba kelis pasirinktus failus ir katalogus
+push_about: Įkelkite failus arba katalogus į bendrinimo grupę
+sub_about: Prenumeruokite bendrinimo grupės naujinius ir padėkite platinti
+group_about: Prisijunkite prie kelių mazgų dvipusio sinchronizavimo grupės
+arg_file_or_dir: Failas arba katalogas, kurį reikia siųsti
+arg_peer_addr: tikslinio mazgo adresas
+arg_listen_addr: pasiklausymo adresas
+arg_out_path: Išvesties failo arba katalogo kelias
+arg_rate: Greitis (baitai per sekundę)
+arg_delete: Ištrinkite perteklinius failus gavėjo pusėje
+arg_quiet: tylus režimas
+arg_share_name: Bendrinkite grupes ir kelius
+arg_local_dir: vietinis katalogas
+arg_dst_dir: tikslinis katalogas
+arg_src_dir: vietinio šaltinio kelias
+arg_peer_addrs_csv: Mazgų adresų sąrašas (atskirtas kableliais)
+arg_origin_addr: Šaltinio mazgo adresas
+arg_subpath: Keli failo arba katalogo kelių pasirinkimas (atskirti kableliais)
+arg_auth: Įgalinti prieigos autentifikavimą
+arg_group_name: Grupės pavadinimas ir kelias
+arg_config: Raktas ir konfigūracijos katalogas
+arg_name: vartotojo vardas
+arg_region: Miesto arba vietovės kodas
+arg_email: Kontaktinis el
+arg_url: Asmeninis URL
+arg_bio: Suasmenintas parašas (daugiausia 256 simboliai)
+err_prefix: klaida

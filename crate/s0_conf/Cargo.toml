@@ -1,0 +1,20 @@
+[package]
+name = "s0_conf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "sync0 带宽速率解析、资源定位符与 NestedText (.nt) 权限配置解析库"
+readme = "../../README.md"
+
+[dependencies]
+gxhash = "3.5.0"
+nested-text = { version = "0.1.0", default-features = false }
+s0_const = { version = "0.1.3", path = "../s0_const" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log_init = "0.1.40"
+tempfile = "3.27.0"

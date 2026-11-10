@@ -1,0 +1,33 @@
+about: Usawazishaji wa faili za rika-kwa-rika na zana za usambazaji wa nodi nyingi
+send_about: Tuma faili au saraka
+recv_about: kupokea faili au saraka
+id_about: Toa anwani ya nodi ya ndani
+profile_about: Tengeneza na utie saini kadi za biashara za nodi za kibinafsi
+share_about: Chapisha kikundi kimoja au zaidi za kushiriki faili
+pull_about: Vuta faili zote au nyingi zilizochaguliwa na saraka kutoka kwa kikundi cha kushiriki
+push_about: Pakia faili au saraka kwa kikundi cha kushiriki
+sub_about: Jisajili ili kushiriki masasisho ya kikundi na usaidie katika usambazaji
+group_about: Jiunge na kikundi cha ulandanishi cha njia mbili za nodi nyingi
+arg_file_or_dir: Faili au saraka itatumwa
+arg_peer_addr: anwani ya nodi inayolengwa
+arg_listen_addr: anwani ya kusikiliza
+arg_out_path: Faili ya pato au njia ya saraka
+arg_rate: Kiwango cha juu cha bei (baiti/sekunde)
+arg_delete: Futa faili zisizohitajika kwenye sehemu ya kupokea
+arg_quiet: hali ya kimya
+arg_share_name: Shiriki vikundi na njia
+arg_local_dir: saraka ya ndani
+arg_dst_dir: saraka lengwa
+arg_src_dir: njia ya chanzo cha ndani
+arg_peer_addrs_csv: Orodha ya anwani za nodi (koma zimetenganishwa)
+arg_origin_addr: Anwani ya nodi ya chanzo
+arg_subpath: Uchaguzi mwingi wa faili au njia za saraka (kutengwa kwa koma)
+arg_auth: Washa uthibitishaji wa ufikiaji
+arg_group_name: Jina la kikundi na njia
+arg_config: Ufunguo na saraka ya usanidi
+arg_name: jina la mtumiaji
+arg_region: Msimbo wa jiji au eneo
+arg_email: Barua pepe ya mawasiliano
+arg_url: URL ya kibinafsi
+arg_bio: Sahihi iliyobinafsishwa (isizidi vibambo 256)
+err_prefix: kosa

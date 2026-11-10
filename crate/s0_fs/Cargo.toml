@@ -1,0 +1,23 @@
+[package]
+name = "s0_fs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "sync0 基于 compio 的异步批量文件 I/O、小文件聚合流与原子暂存提交引擎"
+readme = "../../README.md"
+
+[dependencies]
+compio = { version = "0.19.2", features = ["runtime", "io", "fs"] }
+gxhash = "3.5.0"
+ignore = "0.4.34"
+parking_lot = "0.13.0"
+s0_cdc = { version = "0.1.3", path = "../s0_cdc" }
+s0_const = { version = "0.1.3", path = "../s0_const" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log_init = "0.1.40"
+tempfile = "3.27.0"

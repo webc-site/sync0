@@ -1,0 +1,33 @@
+about: Peer-to-peer fayl sinxronizasiyası və çox qovşaqlı paylama vasitələri
+send_about: Fayl və ya qovluq göndərin
+recv_about: fayl və ya qovluğu qəbul edin
+id_about: Yerli node ünvanını çıxarın
+profile_about: Şəxsi node vizit kartlarını yaradın və imzalayın
+share_about: Bir və ya daha çox fayl paylaşma qruplarını dərc edin
+pull_about: Paylaşım qrupundan bütün və ya bir neçə seçilmiş fayl və qovluqları çəkin
+push_about: Faylları və ya qovluqları paylaşma qrupuna yükləyin
+sub_about: Qrup yeniləmələrini paylaşmağa abunə olun və paylanmağa kömək edin
+group_about: Çox qovşaqlı ikitərəfli sinxronizasiya qrupuna qoşulun
+arg_file_or_dir: Göndəriləcək fayl və ya qovluq
+arg_peer_addr: hədəf node ünvanı
+arg_listen_addr: dinləmə ünvanı
+arg_out_path: Çıxış faylı və ya kataloq yolu
+arg_rate: Tezlik limiti (bayt/saniyə)
+arg_delete: Qəbul edən tərəfdəki lazımsız faylları silin
+arg_quiet: səssiz rejim
+arg_share_name: Qrupları və yolları paylaşın
+arg_local_dir: yerli kataloq
+arg_dst_dir: hədəf kataloqu
+arg_src_dir: yerli mənbə yolu
+arg_peer_addrs_csv: Düyün ünvanlarının siyahısı (vergüllə ayrılmış)
+arg_origin_addr: Mənbə qovşağının ünvanı
+arg_subpath: Fayl və ya kataloq yollarının çoxlu seçimi (vergüllə ayrılmış)
+arg_auth: Giriş identifikasiyasını aktivləşdirin
+arg_group_name: Qrupun adı və yolu
+arg_config: Açar və konfiqurasiya kataloqu
+arg_name: istifadəçi adı
+arg_region: Şəhər və ya ərazi kodu
+arg_email: Əlaqə e-poçtu
+arg_url: Şəxsi URL
+arg_bio: Fərdi imza (maksimum 256 simvol)
+err_prefix: səhv
