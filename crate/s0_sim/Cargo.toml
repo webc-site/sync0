@@ -19,23 +19,23 @@ fastrand = "2.5.0"
 
 [dependencies.s0_cc]
 path = "../s0_cc"
-version = "0.1.3"
+version = "0.1.4"
 
 [dependencies.s0_cdc]
 path = "../s0_cdc"
-version = "0.1.3"
+version = "0.1.4"
 
 [dependencies.s0_const]
 path = "../s0_const"
-version = "0.1.3"
+version = "0.1.4"
 
 [dependencies.s0_udp]
 path = "../s0_udp"
-version = "0.1.3"
+version = "0.1.4"
 
 [dependencies.s0_wire]
 path = "../s0_wire"
-version = "0.1.3"
+version = "0.1.4"
 
 [dev-dependencies]
 aok = "0.1.18"
