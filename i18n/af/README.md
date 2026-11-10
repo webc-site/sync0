@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` is 'n gedesentraliseerde P2P-lêerdeling, intydse sinchronisasie en multi-bronverspreidingsnutsding wat gebruik word om `rsync` te vervang - die gemete spoed van die transkontinentale wye area netwerk is tot **6.95×** van `rsync` (enkelpunt geometriese gemiddelde spoed **P dual x**,× geometriese gemiddelde spoed **P 2.01×**,× ** en P2. die sinchronisasie van massiewe klein lêers oor oseane is so vinnig as **7.19×**.
+`sync0` is 'n gedesentraliseerde P2P-lêerdeling, intydse sinchronisasie en multi-bronverspreidingsnutsding wat gebruik word om `rsync` te vervang - die gemete spoed van transkontinentale WAN is tot `rsync` se **5.89×** (enkelpunt geometriese gemiddelde spoed **2.67×-**, P3P dual speed **, P2P dual speed **, P2P dual speed **. transoseaniese hoë-latency skakel P2P versnelling is tot **7.68×** (Volskakel 24-scenario omvattende geometriese gemiddelde spoed **2.56×**).
 
 Elke masjien is beide 'n bediener en 'n kliënt: daar is geen behoefte aan 'n sentrale bediener of 'n publieke netwerkadres nie, outomatiese gatpons is gebaseer op die verspreide netwerk publieke sleuteladres, en dit ondersteun direkte transmissie tussen twee masjiene, multi-deel groeptoestemming hosting, veelvuldige seleksie van subgidse op aanvraag, millisekonde-vlak intydse inkrementele sinchronisasie en P2P multi-bron versnelling.
 
@@ -154,21 +154,21 @@ Werklike metingsomgewing: Verenigde State `c1` → Europa `n1` (RTT 65 ms), die 
 
 | Datastel | grootte | `sync0` Enkelpunt<br>(Mbps) | `rsync`<br>(Mbps) | Versnel (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nie saampersbaar nie) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(saamdrukbaar) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(plaaslike verandering inkrement) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 klein lêers) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **meetkundige gemiddelde** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nie saampersbaar nie) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(saamdrukbaar) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(plaaslike verandering inkrement) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 klein lêers) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **meetkundige gemiddelde** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P-dubbelbronmodus teenoor `rsync`
 
 | Datastel | grootte | `sync0` P2P Dubbele Bron<br>(Mbps) | `rsync`<br>(Mbps) | Versnel (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nie saampersbaar nie) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(saamdrukbaar) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(plaaslike verandering inkrement) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 klein lêers) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **meetkundige gemiddelde** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nie saampersbaar nie) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(saamdrukbaar) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(plaaslike verandering inkrement) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 klein lêers) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **meetkundige gemiddelde** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Let wel: In P2P-dubbelbronmodus werk Europese nodusse `s1` saam vir saai, en die kruis-kontinentale ruggraat RTT is 65 ms.
 

@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` mərkəzləşdirilməmiş P2P fayl paylaşımı, real vaxt sinxronizasiyası və `rsync` əvəz etmək üçün istifadə edilən çoxmənbəli paylama vasitəsidir - transkontinental geniş ərazi şəbəkəsinin ölçülmüş sürəti `rsync`-dən **6,95×**-ə qədərdir (bir nöqtəli həndəsi orta sürət **2,01 həndəsi mənbə, P orta sürət**- **3,33×**) və okeanlar arasında böyük kiçik faylların sinxronizasiyası **7,19×** qədər sürətlidir.
+`sync0` mərkəzləşdirilməmiş P2P fayl paylaşımı, real vaxt sinxronizasiyası və `rsync` əvəz etmək üçün istifadə edilən çoxmənbəli paylama alətidir - transkontinental WAN-ın ölçülmüş sürəti `rsync`-ün **5.89×** (bir nöqtəli həndəsi orta sürət **2.67×1) və həndəsi orta sürət **2.67×1-**, P2.P du×al **-ə qədərdir. transoceanic yüksək gecikmə əlaqəsi P2P sürətləndirilməsi **7,68×**-ə qədərdir (Tam keçid 24-ssenarili hərtərəfli həndəsi orta sürət **2,56×**).
 
 Hər bir maşın həm server, həm də müştəridir: mərkəzi serverə və ya ictimai şəbəkə ünvanına ehtiyac yoxdur, avtomatik deşik açma paylanmış şəbəkənin ictimai açar ünvanına əsaslanır və o, iki maşın arasında birbaşa ötürməni, çoxlu paylaşma qruplarına icazə hostinqini, tələb üzrə alt kataloqların çoxlu seçimini, millisaniyə səviyyəli real vaxt artımlı çoxmənbəli sinxronizasiyanı və P2P konkurentini dəstəkləyir.
 
@@ -154,21 +154,21 @@ Faktiki ölçmə mühiti: Amerika Birləşmiş Ştatları `c1` → Avropa `n1` (
 
 | Məlumat dəsti | ölçüsü | `sync0` Tək Nöqtə<br>(Mbps) | `rsync`<br>(Mbps) | Sürətləndirmə (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(sıxıla bilməz) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(sıxıla bilən) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(yerli dəyişiklik artımı) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95,979 kiçik fayl) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **həndəsi orta** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(sıxıla bilməz) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(sıxıla bilən) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(yerli dəyişiklik artımı) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95,979 kiçik fayl) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **həndəsi orta** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P ikili mənbə rejimi və `rsync`
 
 | Məlumat dəsti | ölçüsü | `sync0` P2P İkili Mənbə<br>(Mbps) | `rsync`<br>(Mbps) | Sürətləndirmə (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(sıxıla bilməz) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(sıxıla bilən) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(yerli dəyişiklik artımı) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95,979 kiçik fayl) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **həndəsi orta** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(sıxıla bilməz) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(sıxıla bilən) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(yerli dəyişiklik artımı) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 kiçik fayl) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **həndəsi orta** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Qeyd: P2P ikili mənbə rejimində Avropa qovşaqları `s1` əkmək üçün əməkdaşlıq edir və qitələrarası magistral RTT 65 ms-dir.
 

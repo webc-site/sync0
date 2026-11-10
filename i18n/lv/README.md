@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` ir decentralizēts P2P failu koplietošanas, reāllaika sinhronizācijas un vairāku avotu izplatīšanas rīks, ko izmanto, lai aizstātu `rsync` — izmērītais transkontinentālā teritoriālā tīkla ātrums ir līdz **6,95 × ** no `rsync` (viena punkta** ģeometriskais vidējais ātrums ** 2,01 × 3 un 3 vidējais ātrums **2,01 × avota **, P.2). masīvu mazu failu sinhronizācija pāri okeāniem ir tikpat ātra kā **7,19 ×**.
+`sync0` ir decentralizēts P2P failu koplietošanas, reāllaika sinhronizācijas un vairāku avotu izplatīšanas rīks, ko izmanto, lai aizstātu `rsync` — izmērītais transkontinentālā WAN ātrums ir līdz `rsync` **5,89 ×** (viena punkta ģeometriskais vidējais ātrums **2,67 × **), ģeometriskais ** vidējais ātrums **2,67 × **, P2P.1. Transokeāna augstas latentuma saites P2P paātrinājums ir līdz **7,68 ×** (Pilnas saites 24 scenārija visaptverošs ģeometriskais vidējais ātrums **2,56 ×**).
 
 Katra iekārta ir gan serveris, gan klients: nav nepieciešams centrālais serveris vai publiska tīkla adrese, automātiskā caurumu noteikšana ir balstīta uz izplatītā tīkla publiskās atslēgas adresi, un tā atbalsta tiešu pārraidi starp divām iekārtām, vairāku koplietošanas grupu atļauju mitināšanu, vairāku apakšdirektoriju atlasi pēc pieprasījuma, milisekundes līmeņa reāllaika pakāpenisku sinhronizāciju un P2P vairāku avotu vienlaicību.
 
@@ -154,21 +154,21 @@ Faktiskā mērījumu vide: Amerikas Savienotās Valstis `c1` → Eiropa `n1` (RT
 
 | Datu kopa | izmērs | `sync0` Viens punkts<br>(Mb/s) | `rsync`<br>(Mbps) | Paātrinājums (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nav saspiežams) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(saspiežams) | 1.6 GB | **442.07** | 506.62 | **0,87 ×** |
-| `linux-7.3.3.tar`(lokālo izmaiņu pieaugums) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95 ×** |
-| `linux-7.3.3/` (95 979 mazi faili) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **ģeometriskais vidējais** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nav saspiežams) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(saspiežams) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(lokālo izmaiņu pieaugums) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89 ×** |
+| `linux-7.3.3/` (95 979 mazi faili) | 1.5 GB | **627.58** | 347.80 | **1,80 ×** |
+| **ģeometriskais vidējais** | — | **1,000.91** | 375.26 | **2,67 ×** |
 
 #### 2) P2P divu avotu režīms pret `rsync`
 
 | Datu kopa | izmērs | `sync0` P2P Dual Source<br>(Mb/s) | `rsync`<br>(Mbps) | Paātrinājums (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nav saspiežams) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(saspiežams) | 1.6 GB | **992.17** | 506.62 | **1,96 ×** |
-| `linux-7.3.3.tar`(lokālo izmaiņu pieaugums) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 mazi faili) | 1.5 GB | **703.30** | 235.27 | **2,99 ×** |
-| **ģeometriskais vidējais** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nav saspiežams) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(saspiežams) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(lokālo izmaiņu pieaugums) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 mazi faili) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **ģeometriskais vidējais** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Piezīme. P2P divu avotu režīmā Eiropas mezgli `s1` sadarbojas sēšanai, un starpkontinentālais mugurkauls RTT ir 65 ms.
 

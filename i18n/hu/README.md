@@ -1,6 +1,6 @@
 # sync0
 
-A `sync0` egy decentralizált P2P fájlmegosztó, valós idejű szinkronizálás és többforrású terjesztési eszköz, amely a `rsync` helyettesítésére szolgál - a transzkontinentális nagy kiterjedésű hálózat mért sebessége legfeljebb **6,95×** a `rsync`-ból (egypontos** geometriai átlagsebesség **2.01×-forrás 3 és 3 3 × geometriai átlagsebesség **, P.2). a hatalmas kis fájlok szinkronizálása az óceánokon keresztül akár **7,19×**.
+A `sync0` egy decentralizált P2P fájlmegosztó, valós idejű szinkronizálás és többforrású terjesztési eszköz, amely a `rsync` helyettesítésére szolgál - a transzkontinentális WAN mért sebessége eléri a `rsync` **5,89×** (egypontos geometriai átlagsebesség **2,67×**), P2P.1 ** geometriai átlagsebesség **2,67×**, P2P. Az óceánon túli, nagy késleltetésű link P2P-gyorsulása akár **7,68×** (A teljes kapcsolat 24 forgatókönyve átfogó geometriai átlagsebesség **2,56×**).
 
 Minden gép egyben szerver és kliens is: nincs szükség központi szerverre vagy nyilvános hálózati címre, az automatikus lyukasztás az elosztott hálózati nyilvános kulcs címén alapul, és támogatja a közvetlen átvitelt két gép között, több megosztásos csoportengedély-tárhelyet, igény szerinti alkönyvtárak többszörös kiválasztását, ezredmásodperces szintű valós idejű növekményes szinkronizálást és P2P többforrásos egyidejűséget.
 
@@ -154,21 +154,21 @@ Tényleges mérési környezet: Egyesült Államok `c1` → Európa `n1` (RTT 65
 
 | Adatkészlet | méret | `sync0` Egypontos<br>(Mbps) | `rsync`<br>(Mbps) | Gyorsítás (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nem tömöríthető) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(tömöríthető) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(helyi változás növekménye) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 kis fájl) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometriai átlag** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nem tömöríthető) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(tömöríthető) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(helyi változás növekménye) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 kis fájl) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometriai átlag** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P kétforrású mód vs `rsync`
 
 | Adatkészlet | méret | `sync0` P2P kettős forrás<br>(Mbps) | `rsync`<br>(Mbps) | Gyorsítás (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nem tömöríthető) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(tömöríthető) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(helyi változás növekménye) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 kis fájl) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometriai átlag** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nem tömöríthető) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(tömöríthető) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(helyi változás növekménye) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 kis fájl) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometriai átlag** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Megjegyzés: P2P kettős forrású módban az európai csomópontok `s1` együttműködnek a vetésben, és a kontinenseket átívelő gerinc RTT 65 ms.
 

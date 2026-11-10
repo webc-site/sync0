@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` je decentralizirano P2P dijeljenje datoteka, sinkronizacija u stvarnom vremenu i distribucijski alat s više izvora koji se koristi za zamjenu `rsync` - izmjerena brzina transkontinentalne širokopojasne mreže je do **6,95×** od `rsync` (prosječna geometrijska brzina u jednoj točki **2,01×**, prosječna geometrijska brzina P2P s dva izvora **3,33×**), a sinkronizacija ogromnih malih datoteka preko oceana je brza kao **7.19×**.
+`sync0` je decentralizirano P2P dijeljenje datoteka, sinkronizacija u stvarnom vremenu i alat za distribuciju s više izvora koji se koristi za zamjenu `rsync` - izmjerena brzina transkontinentalnog WAN-a je do `rsync` **5,89×** (prosječna geometrijska brzina u jednoj točki **2,67×**, prosječna geometrijska brzina P2P s dva izvora **3,16×**), i P2P ubrzanje transoceanske veze s visokom latencijom do **7,68×** (sveobuhvatna geometrijska srednja brzina 24 scenarija pune veze **2,56×**).
 
 Svaki je stroj i poslužitelj i klijent: nema potrebe za središnjim poslužiteljem ili javnom mrežnom adresom, automatsko bušenje rupa temelji se na adresi javnog ključa distribuirane mreže i podržava izravan prijenos između dva računala, hosting grupnih dopuštenja za više dijeljenja, višestruki odabir poddirektorija na zahtjev, inkrementalnu sinkronizaciju u stvarnom vremenu na razini milisekunde i P2P istodobno ubrzanje s više izvora.
 
@@ -154,21 +154,21 @@ Stvarno mjerno okruženje: Sjedinjene Države `c1` → Europa `n1` (RTT 65 ms), 
 
 | Skup podataka | veličina | `sync0` Jedna točka<br>(Mbps) | `rsync`<br>(Mbps) | Ubrzanje (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nije kompresivan) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(sažimanje) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(povećanje lokalne promjene) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 malih datoteka) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrijska sredina** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nije kompresivan) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(sažimanje) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(povećanje lokalne promjene) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 malih datoteka) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrijska sredina** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P način s dva izvora u odnosu na `rsync`
 
 | Skup podataka | veličina | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Ubrzanje (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nije kompresivan) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(sažimanje) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(povećanje lokalne promjene) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 malih datoteka) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrijska sredina** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nije kompresivan) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(sažimanje) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(povećanje lokalne promjene) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 malih datoteka) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrijska sredina** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Napomena: U P2P načinu rada s dva izvora, europski čvorovi `s1` surađuju za sijanje, a RTT međukontinentalne okosnice je 65 ms.
 

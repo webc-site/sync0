@@ -67,6 +67,7 @@ pub fn recv_range_udp(
   let mut pkt_buf = [0u8; MAX_UDP_PKT];
   let mut nack_buf = Vec::with_capacity(256);
   let (mut bytes_transferred, mut blocks_transferred) = (0u64, 0u32);
+  let mut eff_wire_bytes = 0u64;
   let mut corrupt_strikes = 0u32;
   let (mut expected_blk, mut highest_seen_blk) = (spec.blk_lo, spec.blk_lo);
   let (mut has_unacked_gap, mut idle_nacked) = (false, false);
@@ -130,6 +131,7 @@ pub fn recv_range_udp(
         if payload_end > n || !amp.on_recv(from, n) {
           continue;
         }
+        eff_wire_bytes += n.max(1024) as u64;
         locked_peer = Some(from);
         last_rx_us = now_us();
         if !rtt_measured {
@@ -283,7 +285,7 @@ pub fn recv_range_udp(
                     sock,
                     from_ref(&from),
                     sid24,
-                    (bytes_transferred >> 10) as u32,
+                    (eff_wire_bytes >> 10) as u32,
                     prog_hi,
                     1,
                   );

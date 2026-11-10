@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` ni ugawizaji wa faili wa P2P uliogatuliwa, ulandanishaji wa wakati halisi na zana ya usambazaji wa vyanzo vingi inayotumika kuchukua nafasi ya `rsync` - kasi iliyopimwa ya mtandao wa eneo pana linalovuka bara ni hadi **6.95×** ya `rsync` (kasi ya wastani ya kijiometri ya nukta moja **2.01×**), P3.3 ya wastani ya kasi ya kijiometri***, P3P ya wastani* ya kijiometri*, na P3P ya kasi mbili*** ulandanishi wa faili kubwa ndogo kwenye bahari ni haraka kama **7.19×**.
+`sync0` ni ugawizaji wa faili wa P2P uliogatuliwa, usawazishaji wa wakati halisi na zana ya usambazaji wa vyanzo vingi inayotumika kuchukua nafasi ya `rsync` - kasi iliyopimwa ya WAN ya kupita bara ni hadi `rsync`'s **5.89×** (kasi moja ya wastani ya kijiometri **2.67×**, P2P wastani wa kasi ya kijiometri**3), P2P wastani wa kasi ya kijiometri*3. Uongezaji kasi wa kiungo cha P2P cha muda wa juu wa kusubiri ni hadi **7.68×** (Kiungo kamili cha 24-kasi ya maana ya kijiometri **2.56×**).
 
 Kila mashine ni seva na mteja: hakuna haja ya seva kuu au anwani ya mtandao wa umma, ubomoaji wa shimo otomatiki unatokana na anwani ya ufunguo wa umma uliosambazwa, na inasaidia upitishaji wa moja kwa moja kati ya mashine mbili, upangishaji wa ruhusa wa vikundi vingi, uteuzi kadhaa wa subdirectories unapohitajika, usawazishaji wa nyongeza wa rasilimali nyingi wa kiwango cha millisecond na upatanishi wa P2P.
 
@@ -154,21 +154,21 @@ Mazingira halisi ya kipimo: Marekani `c1` → Ulaya `n1` (RTT 65 ms), seti ya da
 
 | Seti ya data | ukubwa | `sync0` Pointi Moja<br>(Mbps) | `rsync`<br>(Mbps) | Kuongeza kasi (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(haiwezi kubana) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(inayobana) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(ongezeko la mabadiliko ya ndani) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (faili ndogo 95,979) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **maana ya kijiometri** | - | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(haiwezi kubana) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(inayobana) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(ongezeko la mabadiliko ya ndani) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (faili ndogo 95,979) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| **maana ya kijiometri** | - | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) Hali ya P2P ya vyanzo viwili dhidi ya `rsync`
 
 | Seti ya data | ukubwa | `sync0` P2P Chanzo Mbili<br>(Mbps) | `rsync`<br>(Mbps) | Kuongeza kasi (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(haiwezi kubana) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(inayobana) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(ongezeko la mabadiliko ya ndani) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (faili ndogo 95,979) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| **maana ya kijiometri** | - | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(haiwezi kubana) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(inayobana) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(ongezeko la mabadiliko ya ndani) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (faili ndogo 95,979) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **maana ya kijiometri** | - | **1,186.42** | 375.26 | **3.16×** |
 
 > Kumbuka: Katika hali ya P2P-chanzo-mbili, nodi za Ulaya `s1` hushirikiana kwa ajili ya kupanda, na uti wa mgongo wa mabara RTT ni 65 ms.
 

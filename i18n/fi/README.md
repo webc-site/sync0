@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` on hajautettu P2P-tiedostonjako-, reaaliaikainen synkronointi- ja usean lähteen jakelutyökalu, jota käytetään korvaamaan `rsync` - mannertenvälisen suuralueverkon mitattu nopeus on jopa **6,95×** nopeudesta `rsync` (yhden pisteen** geometrinen keskinopeus **2.01×-lähde 3 ja 3 keskimääräinen nopeus **2.01×**, P2). massiivisten pienten tiedostojen synkronointi valtamerien välillä on jopa **7,19×**.
+`sync0` on hajautettu P2P-tiedostonjako-, reaaliaikainen synkronointi- ja usean lähteen jakelutyökalu, jota käytetään korvaamaan `rsync` - mannertenvälisen WAN-verkon mitattu nopeus on jopa `rsync`:n **5,89×** (yhden pisteen geometrinen keskinopeus **2,67×**), P2P.16× **2,67×**, P2P. valtameren korkean latenssin linkin P2P-kiihtyvyys on jopa **7,68×** (täyden linkin 24 skenaarion kattava geometrinen keskinopeus **2,56×**).
 
 Jokainen kone on sekä palvelin että asiakas: ei tarvita keskuspalvelinta tai julkista verkko-osoitetta, automaattinen rei'itys perustuu hajautetun verkon julkisen avaimen osoitteeseen, ja se tukee suoraa tiedonsiirtoa kahden koneen välillä, usean jakamisen ryhmäluvan isännöintiä, useampaa alihakemistojen valintaa tarpeen mukaan, millisekuntitason reaaliaikaista inkrementaalista synkronointia ja P2P-monilähdeyhteyttä.
 
@@ -154,21 +154,21 @@ Todellinen mittausympäristö: Yhdysvallat `c1` → Eurooppa `n1` (RTT 65 ms), t
 
 | Tietojoukko | koko | `sync0` Yksi piste<br>(Mbps) | `rsync`<br>(Mbps) | Nopeus (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ei pakattavissa) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(pakkattavissa) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(paikallinen muutoksen lisäys) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 pientä tiedostoa) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrinen keskiarvo** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(ei pakattavissa) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(pakkattavissa) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(paikallinen muutoksen lisäys) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 pientä tiedostoa) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrinen keskiarvo** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P-kaksoislähdetila vs. `rsync`
 
 | Tietojoukko | koko | `sync0` P2P-kaksoislähde<br>(Mbps) | `rsync`<br>(Mbps) | Nopeus (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ei pakattavissa) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(pakkattavissa) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(paikallinen muutoksen lisäys) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 pientä tiedostoa) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrinen keskiarvo** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(ei pakattavissa) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(pakkattavissa) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(paikallinen muutoksen lisäys) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 pientä tiedostoa) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrinen keskiarvo** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Huomautus: P2P-kaksoislähdetilassa eurooppalaiset solmut `s1` tekevät yhteistyötä kylvössä, ja mannertenvälisen runkoverkon RTT on 65 ms.
 

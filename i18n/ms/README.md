@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` ialah perkongsian fail P2P terpencar, penyegerakan masa nyata dan alat pengedaran berbilang sumber yang digunakan untuk menggantikan `rsync` - kelajuan terukur rangkaian kawasan luas rentas benua adalah sehingga **6.95×** daripada `rsync` (titik tunggal geometrik purata kelajuan **2.01×**. kelajuan purata geometri **2.01×**, P23P purata kelajuan ******, P23P. penyegerakan fail kecil yang besar merentasi lautan adalah sepantas **7.19×**.
+`sync0` ialah perkongsian fail P2P terpencar, penyegerakan masa nyata dan alat pengedaran berbilang sumber yang digunakan untuk menggantikan `rsync` - kelajuan terukur WAN rentas benua adalah sehingga `rsync`'s **5.89×** (satu titik geometri purata kelajuan **2.67×**. geometrik kelajuan dwi-sumber ****, P2P dan purata 3 sumber. pecutan P2P pautan kependaman tinggi adalah sehingga **7.68×** (Pautan penuh 24-senario kelajuan min geometri komprehensif **2.56×**).
 
 Setiap mesin adalah kedua-dua pelayan dan pelanggan: tidak ada keperluan untuk pelayan pusat atau alamat rangkaian awam, penebuk lubang automatik adalah berdasarkan alamat kunci awam rangkaian yang diedarkan, dan ia menyokong penghantaran terus antara dua mesin, pengehosan kebenaran kumpulan berbilang perkongsian, pilihan berbilang subdirektori atas permintaan, penyegerakan tambahan masa nyata peringkat milisaat dan penyegerakan berbilang sumber P2P serentak.
 
@@ -154,21 +154,21 @@ Persekitaran ukuran sebenar: Amerika Syarikat `c1` → Eropah `n1` (RTT 65 ms), 
 
 | Set data | saiz | `sync0` Titik Tunggal<br>(Mbps) | `rsync`<br>(Mbps) | Kelajuan (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(tidak boleh mampat) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(boleh mampat) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(kenaikan perubahan setempat) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95,979 fail kecil) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **min geometri** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(tidak boleh mampat) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(boleh mampat) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(kenaikan perubahan setempat) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95,979 fail kecil) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| **min geometri** | — | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) Mod dwi-sumber P2P lwn `rsync`
 
 | Set data | saiz | `sync0` Sumber Dwi P2P<br>(Mbps) | `rsync`<br>(Mbps) | Kelajuan (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(tidak boleh mampat) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(boleh mampat) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(kenaikan perubahan setempat) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95,979 fail kecil) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| **min geometri** | — | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(tidak boleh mampat) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(boleh mampat) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(kenaikan perubahan setempat) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 fail kecil) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **min geometri** | — | **1,186.42** | 375.26 | **3.16×** |
 
 > Nota: Dalam mod dwi-sumber P2P, nod Eropah `s1` bekerjasama untuk pembenihan, dan RTT tulang belakang merentas benua ialah 65 ms.
 

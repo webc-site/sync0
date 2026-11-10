@@ -93,6 +93,16 @@ impl RttEstimator {
     self.reo_us
   }
 
+  /// 使用握手阶段测得的初始 RTT 预热 `srtt_us` 与 `rttvar_us`（不锁定 `rtt_min_us`，首个真实数据包 ACK 到达时再正式锚定 `rtt_min_us`）
+  pub fn seed_srtt(&mut self, sample: u64) {
+    if sample == 0 || self.has_rtt {
+      return;
+    }
+    let sample = sample.min(MAX_SAMPLE_US);
+    self.srtt_us = sample;
+    self.rttvar_us = sample / 2;
+  }
+
   /// 输入一个新的 RTT 测量样本（微秒，`0` 忽略，超过 60 s 截断）
   pub fn on_sample(&mut self, sample: u64) {
     self.on_sample_with_inflight(sample, true);

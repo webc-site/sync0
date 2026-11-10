@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` ass en dezentraliséierte P2P Datei Sharing, Echtzäit Synchroniséierung a Multi-Source Verdeelungsinstrument dat benotzt gëtt fir `rsync` ze ersetzen - déi gemoossene Geschwindegkeet vum transkontinentale Wäitflächennetz ass bis zu **6.95×** vun `rsync` (Eenpunkt geometresch Duerchschnëttsgeschwindegkeet **P dual ×**, 3.× geometresch Duerchschnëttsgeschwindegkeet **P dual ×**, 3.× ** geometresch Geschwindegkeet ** 3. d'Synchroniséierung vu massiven klengen Dateien iwwer Ozeanen ass sou séier wéi **7.19×**.
+`sync0` ass en dezentraliséierte P2P Datei Sharing, Echtzäit Synchroniséierung a Multi-Source Verdeelungsinstrument dat benotzt gëtt fir `rsync` ze ersetzen - déi gemoossene Geschwindegkeet vum transkontinentale WAN ass bis zu `rsync`'s **5.89×** (Eenpunkt geometresch Duerchschnëttsgeschwindegkeet **2.67×-** ** Source Dual Geschwindegkeet **, P2P. transoceanic High-latency Link P2P Beschleunegung ass bis zu **7.68×** (Volllink 24-Szenario ëmfaassend geometresch Mëttelgeschwindegkeet **2.56×**).
 
 All Maschinn ass souwuel e Server wéi och e Client: et gëtt kee Besoin fir en zentrale Server oder eng ëffentlech Netzwierkadress, automatesch Lachpunching baséiert op der verdeelt Netzwierk ëffentlech Schlësseladress, an et ënnerstëtzt direkt Iwwerdroung tëscht zwou Maschinnen, Multi-Sharing Group Permission Hosting, Multi-Sharing Group Permission Hosting, Multi-Sharing Group Erlaabnis Hosting, Multi-Sharing Group Subdirectories on Demand, Millisekonnen-Niveau Echtzäit inkrementell Synchroniséierung a P2P Multi-Source Beschleunegung.
 
@@ -154,21 +154,21 @@ Tatsächlech Miessëmfeld: USA `c1` → Europa `n1` (RTT 65 ms), den Dateset ass
 
 | Datenset | Gréisst | `sync0` Eenzelpunkt<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(net kompriméierbar) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(kompressibel) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(lokal Ännerung Inkrement) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95.979 kleng Dateien) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **geometresch Mëttel** | - | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(net kompriméierbar) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(kompressibel) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(lokal Ännerung Inkrement) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95.979 kleng Dateien) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| **geometresch Mëttel** | - | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) P2P Dual-Source Modus vs `rsync`
 
 | Datenset | Gréisst | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(net kompriméierbar) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(kompressibel) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(lokal Ännerung Inkrement) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95.979 kleng Dateien) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| **geometresch Mëttel** | - | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(net kompriméierbar) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(kompressibel) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(lokal Ännerung Inkrement) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95.979 kleng Dateien) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **geometresch Mëttel** | - | **1,186.42** | 375.26 | **3.16×** |
 
 > Notiz: Am P2P Dual-Source Modus kollaboréieren europäesch Noden `s1` fir Aussaat, an de cross-kontinentale Réckgrat RTT ass 65 ms.
 

@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` er et decentraliseret P2P-fildelings-, realtidssynkroniserings- og distributionsværktøj med flere kilder, der bruges til at erstatte `rsync` - den målte hastighed for det transkontinentale wide area-netværk er op til **6,95×** af `rsync` (enkeltpunkts geometrisk gennemsnitshastighed **P dual×-**,× geometrisk gennemsnitshastighed **P dual×-**, 3** og ** geometrisk hastighed **, 3, **, 3, ** og **, 2. synkroniseringen af massive små filer på tværs af oceaner er så hurtig som **7,19×**.
+`sync0` er et decentraliseret P2P-fildelings-, realtidssynkroniserings- og distributionsværktøj med flere kilder, der bruges til at erstatte `rsync` - den målte hastighed for transkontinentalt WAN er op til `rsync`s **5,89×** (enkeltpunkts geometrisk gennemsnitshastighed **2,67×-**), P3P dual hastighed **, P2P dual **, P2P dual speed **. transoceanisk high-latency link P2P acceleration er op til **7,68×** (Full-link 24-scenario omfattende geometrisk middelhastighed **2,56×**).
 
 Hver maskine er både en server og en klient: der er ikke behov for en central server eller en offentlig netværksadresse, automatisk hulning er baseret på den distribuerede netværks offentlige nøgleadresse, og den understøtter direkte transmission mellem to maskiner, hosting af multidelingsgruppetilladelser, flere valg af undermapper efter behov, trinvis synkronisering på millisekundniveau i realtid og samtidig P2P-acceleration.
 
@@ -154,21 +154,21 @@ Faktisk målemiljø: USA `c1` → Europa `n1` (RTT 65 ms), datasættet er Linux-
 
 | Datasæt | størrelse | `sync0` Enkelt punkt<br>(Mbps) | `rsync`<br>(Mbps) | Fremskyndelse (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ikke komprimerbar) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(komprimerbar) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(lokal ændringsstigning) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 små filer) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrisk middelværdi** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(ikke komprimerbar) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(komprimerbar) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(lokal ændringsstigning) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 små filer) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrisk middelværdi** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P-dobbeltkildetilstand vs `rsync`
 
 | Datasæt | størrelse | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Fremskyndelse (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ikke komprimerbar) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(komprimerbar) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(lokal ændringsstigning) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 små filer) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrisk middelværdi** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(ikke komprimerbar) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(komprimerbar) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(lokal ændringsstigning) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 små filer) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrisk middelværdi** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Bemærk: I P2P dual-source-tilstand samarbejder europæiske noder `s1` om seeding, og den tværkontinentale backbone RTT er 65 ms.
 

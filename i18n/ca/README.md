@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` és una eina descentralitzada per compartir fitxers P2P, sincronització en temps real i distribució de fonts múltiples que s'utilitza per substituir `rsync`: la velocitat mesurada de la xarxa d'àrea àmplia transcontinental és de fins a **6,95×** de `rsync` (velocitat mitjana geomètrica d'un sol punt **2,01×**), velocitat mitjana de sincronització geomètrica** i P2P3**-3**, font. fitxers petits massius a través dels oceans és tan ràpid com **7,19×**.
+`sync0` és una eina descentralitzada per compartir fitxers P2P, sincronització en temps real i distribució de fonts múltiples que s'utilitza per substituir `rsync`: la velocitat mesurada de la WAN transcontinental és de **5,89×** de `rsync` (velocitat mitjana geomètrica d'un sol punt **2,67×**, velocitat mitjana P2P dual** i 3o6 geomètrica) **. L'acceleració P2P d'enllaç d'alta latència és de fins a **7,68×** (velocitat mitjana geomètrica completa de 24 escenaris d'enllaç complet **2,56×**).
 
 Cada màquina és alhora un servidor i un client: no hi ha necessitat d'un servidor central ni d'una adreça de xarxa pública, la perforació automàtica es basa en l'adreça de la clau pública de la xarxa distribuïda i admet la transmissió directa entre dues màquines, allotjament de permisos de grup per compartir múltiples, selecció múltiple de subdirectoris sota demanda, sincronització incremental en temps real de mil·lisegons i acceleració concurrent P2P multifont.
 
@@ -154,21 +154,21 @@ Entorn de mesura real: Estats Units `c1` → Europa `n1` (RTT 65 ms), el conjunt
 
 | Conjunt de dades | mida | `sync0` Punt únic<br>(Mbps) | `rsync`<br>(Mbps) | Acceleració (`sync0`/`rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(no compressible) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(increment de canvi local) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 fitxers petits) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **mitjana geomètrica** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(no compressible) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(increment de canvi local) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 fitxers petits) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **mitjana geomètrica** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) Mode de font dual P2P vs `rsync`
 
 | Conjunt de dades | mida | `sync0` Font dual P2P<br>(Mbps) | `rsync`<br>(Mbps) | Acceleració (`sync0`/`rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(no compressible) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(increment de canvi local) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 fitxers petits) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **mitjana geomètrica** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(no compressible) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(increment de canvi local) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 fitxers petits) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **mitjana geomètrica** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Nota: en el mode de font dual P2P, els nodes europeus `s1` col·laboren per a la sembra, i l'RTT de la columna vertebral intercontinental és de 65 ms.
 

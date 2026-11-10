@@ -246,13 +246,26 @@ impl PeerNode {
   }
 
   pub(crate) fn add_share_with_paths(&self, cfg: ShareConfig, sub_paths: Vec<String>) {
-    let cached_manifest = if sub_paths.is_empty() && cfg.root.exists() {
-      build_manifest_from_paths::<&str>(&cfg.root, &[], false)
-        .ok()
-        .and_then(|mf| Some((Vec::new(), mf.root_hash().ok()?, mf)))
+    let existing_cached = if sub_paths.is_empty() {
+      self
+        .shares
+        .read()
+        .get(&cfg.share_id)
+        .filter(|st| st.cfg.root == cfg.root)
+        .and_then(|st| st.cached_manifest.clone())
+        .filter(|(cp, ..)| cp.is_empty())
     } else {
       None
     };
+    let cached_manifest = existing_cached.or_else(|| {
+      (sub_paths.is_empty() && cfg.root.exists())
+        .then(|| {
+          build_manifest_from_paths::<&str>(&cfg.root, &[], false)
+            .ok()
+            .and_then(|mf| Some((Vec::new(), mf.root_hash().ok()?, mf)))
+        })
+        .flatten()
+    });
     let persisted = if sub_paths.is_empty() && cfg.root.exists() {
       load_subs_file(&cfg.root)
     } else {

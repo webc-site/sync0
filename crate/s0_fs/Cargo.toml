@@ -12,8 +12,8 @@ compio = { version = "0.19.2", features = ["runtime", "io", "fs"] }
 gxhash = "3.5.0"
 ignore = "0.4.34"
 parking_lot = "0.13.0"
-s0_cdc = { version = "0.1.2", path = "../s0_cdc" }
-s0_const = { version = "0.1.2", path = "../s0_const" }
+s0_cdc = { version = "0.1.3", path = "../s0_cdc" }
+s0_const = { version = "0.1.3", path = "../s0_const" }
 thiserror = "2.0.21"
 
 [dev-dependencies]

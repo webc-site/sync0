@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` is a decentralized P2P file sharing, real-time synchronization, and multi-source distribution tool designed to replace `rsync` — measured cross-continental WAN speed is up to **6.95×** faster than `rsync` (single-point geometric mean **2.01×** faster, P2P dual-source geometric mean **3.33×** faster), and trans-oceanic massive small file synchronization is up to **7.19×** faster.
+`sync0` is a decentralized P2P file sharing, real-time synchronization and multi-source distribution tool used to replace `rsync` - the measured speed of transcontinental WAN is up to `rsync`'s **5.89×** (single point geometric average speed **2.67×**, P2P dual-source geometric average speed **3.16×**), and transoceanic high-latency link P2P acceleration is up to **7.68×** (Full-link 24-scenario comprehensive geometric mean speed **2.56×**).
 
 Each machine is both a server and a client: no central server or public network address is required, automatic hole punching is performed based on distributed network public key addresses, supporting direct transfer between two machines, multi-sharing group permission hosting, on-demand multi-selection of subdirectories, millisecond-level real-time incremental synchronization, and P2P multi-source concurrent acceleration.
 
@@ -154,21 +154,21 @@ Actual measurement environment: United States `c1` → Europe `n1` (RTT 65 ms), 
 
 | Data set | Size | `sync0` Single Point<br>(Mbps) | 1,404.10 | Speedup (`sync0` / `rsync`) |
 `linux-7.3.3/` (95,979 small files)
-| `linux-7.3.3.tar.xz` (not compressible) | **486.19** | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar` (compressible) | `linux-7.3.3.tar.xz`(not compressible) | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar` (local change increment) | `linux-7.3.3.tar.xz`(not compressible) | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95,979 small files) | `linux-7.3.3.tar`(compressible) | **565.49** | 235.27 | **2.40×** |
-| **Geometric mean** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz` (not compressible) | **486.19** | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar` (compressible) | `linux-7.3.3.tar.xz`(not compressible) | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar` (local change increment) | `linux-7.3.3.tar.xz`(not compressible) | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95,979 small files) | `linux-7.3.3.tar`(compressible) | **627.58** | 347.80 | **1.80×** |
+| **Geometric mean** | — | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) P2P dual-source mode vs `rsync`
 
 | Data set | Size | `sync0` P2P Dual Source<br>(Mbps) | 1,404.10 | Speedup (`sync0` / `rsync`) |
 `linux-7.3.3/` (95,979 small files)
-| `linux-7.3.3.tar.xz` (not compressible) | **486.19** | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar` (compressible) | `linux-7.3.3.tar.xz`(not compressible) | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar` (local change increment) | `linux-7.3.3.tar.xz`(not compressible) | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95,979 small files) | `linux-7.3.3.tar`(compressible) | **703.30** | 235.27 | **2.99×** |
-| **Geometric mean** | — | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz` (not compressible) | **486.19** | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar` (compressible) | `linux-7.3.3.tar.xz`(not compressible) | **1,551.86** | 385.06 | 107.05 |
+| `linux-7.3.3.tar` (local change increment) | `linux-7.3.3.tar.xz`(not compressible) | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 small files) | `linux-7.3.3.tar`(compressible) | **706.56** | 347.80 | **2.03×** |
+| **Geometric mean** | — | **1,186.42** | 375.26 | **3.16×** |
 
 > Note: In P2P dual-source mode, European nodes `s1` collaborate for seeding, and the cross-continental backbone RTT is 65 ms.
 

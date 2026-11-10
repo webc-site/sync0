@@ -1,6 +1,6 @@
 # sync0
 
-Ang `sync0` usa ka desentralisado nga P2P file sharing, real-time nga pag-synchronize ug multi-source distribution tool nga gigamit sa pag-ilis sa `rsync` - ang gisukod nga gikusgon sa transcontinental wide area network kay hangtod sa **6.95×** sa `rsync` (single-point geometric average speed **2.01×.**, P2C average speed **2.01×**. Ang pag-synchronize sa dagkong gagmay nga mga file sa tibuok kadagatan sama ka paspas sa **7.19×**.
+Ang `sync0` usa ka desentralisadong P2P file sharing, real-time nga pag-synchronize ug multi-source distribution tool nga gigamit sa pag-ilis sa `rsync` - ang gisukod nga katulin sa transcontinental WAN kay hangtod sa `rsync`'s **5.89×** (single point geometric average speed **2.67×**, P2P×an dual-source speed **2.67×**, P2P×an nga katulin sa transkontinente ****), high-latency link P2P acceleration kay hangtod sa **7.68×** (Full-link 24-scenario comprehensive geometric mean speed **2.56×**).
 
 Ang matag makina usa ka server ug kliyente: wala’y kinahanglan alang sa usa ka sentral nga server o usa ka adres sa publiko nga network, ang awtomatik nga pagsuntok sa lungag gibase sa giapod-apod nga network sa publiko nga yawe nga adres, ug gisuportahan niini ang direkta nga transmission tali sa duha nga mga makina, pag-host sa pagtugot sa multi-sharing nga grupo, daghang pagpili sa mga subdirektoryo nga gipangayo, millisecond-level real-time incremental synchronization ug P2P multi-source concurrent a.
 
@@ -154,21 +154,21 @@ Aktuwal nga sukod sa palibot: United States `c1` → Europe `n1` (RTT 65 ms), an
 
 | Set sa datos | gidak-on | `sync0` Usa ka Punto<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(dili ma-compress) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(makompres) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(lokal nga pag-usbaw sa kausaban) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95,979 ka gagmay nga mga file) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| ** geometriko nga kahulogan ** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(dili ma-compress) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(makompres) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(lokal nga pag-usbaw sa kausaban) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95,979 ka gagmay nga mga file) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| ** geometriko nga kahulogan ** | — | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) P2P dual-source mode vs `rsync`
 
 | Set sa datos | gidak-on | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(dili ma-compress) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(makompres) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(lokal nga pag-usbaw sa kausaban) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95,979 ka gagmay nga mga file) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| ** geometriko nga kahulogan ** | — | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(dili ma-compress) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(makompres) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(lokal nga pag-usbaw sa kausaban) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 ka gagmay nga mga file) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| ** geometriko nga kahulogan ** | — | **1,186.42** | 375.26 | **3.16×** |
 
 > Mubo nga sulat: Sa P2P dual-source mode, ang European nodes `s1` magtinabangay para sa pagpugas, ug ang cross-continental backbone RTT kay 65 ms.
 

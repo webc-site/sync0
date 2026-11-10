@@ -61,8 +61,8 @@ pub(crate) const fn cache_slot_idx(block_idx: u32) -> usize {
 pub(crate) const MAX_NACK_RESEND_BATCH: u32 = 512;
 /// 广域网单节点默认平滑发送速率（48 MB/s = 384 Mbps，匹配高 BDP 跨国链路并由微突发 Pacer 平滑防溢出）
 pub(crate) const WAN_DEFAULT_RATE_BPS: u64 = 48_000_000;
-/// 高时延跨洋链路（RTT >= 80 ms）慢启动初始发送速率（8 MB/s = 64 Mbps，避免首轮突发挤爆跨洋瓶颈队列，随后根据进度 ACK 实测交付速率动态伸缩）
-pub(crate) const WAN_HIGH_RTT_INIT_RATE_BPS: u64 = 8_000_000;
+/// 高时延跨洋链路（RTT >= 80 ms）慢启动初始发送速率（4 MB/s = 32 Mbps，避免首轮突发挤爆跨洋瓶颈队列，随后根据进度 ACK 实测交付速率动态伸缩）
+pub(crate) const WAN_HIGH_RTT_INIT_RATE_BPS: u64 = 4_000_000;
 /// SuperBlock 聚合小文件与可压小分块的单块最大触发阈值（32 KiB）
 pub(crate) const SUPER_SMALL_LIMIT: u32 = 32 * 1024;
 /// 不可压小文件 SuperBlock 聚合单块上限（16_000 B）

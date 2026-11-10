@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` is een gedecentraliseerde tool voor het delen van P2P-bestanden, realtime synchronisatie en distributie van meerdere bronnen die wordt gebruikt ter vervanging van `rsync` - de gemeten snelheid van het transcontinentale WAN-netwerk is maximaal **6,95×** van `rsync` (geometrische gemiddelde snelheid op één punt **2,01×**, geometrische gemiddelde P2P dual-source snelheid **3,33×**), en de synchronisatie van enorme kleine bestanden over oceanen is zo snel als **7,19×**.
+`sync0` is een tool voor het gedecentraliseerd delen van P2P-bestanden, realtime synchronisatie en distributie van meerdere bronnen, gebruikt ter vervanging van `rsync` - de gemeten snelheid van transcontinentaal WAN bedraagt maximaal `rsync`'s **5,89×** (geometrische gemiddelde snelheid op één punt **2,67×**, geometrische gemiddelde P2P-snelheid met dubbele bron **3,16×**) en een transoceanische link met hoge latentie P2P-versnelling bedraagt maximaal **7,68×** (Full-link 24-scenario uitgebreide geometrische gemiddelde snelheid **2,56×**).
 
 Elke machine is zowel een server als een client: er is geen centrale server of een openbaar netwerkadres nodig, automatisch perforeren is gebaseerd op het openbare sleuteladres van het gedistribueerde netwerk en ondersteunt directe overdracht tussen twee machines, hosting met meerdere gedeelde groepsrechten, meerdere selectie van submappen op aanvraag, real-time incrementele synchronisatie op millisecondenniveau en gelijktijdige P2P-versnelling met meerdere bronnen.
 
@@ -154,21 +154,21 @@ Werkelijke meetomgeving: Verenigde Staten `c1` → Europa `n1` (RTT 65 ms), de d
 
 | Gegevensset | maat | `sync0` Eén punt<br>(Mbps) | `rsync`<br>(Mbps) | Versnellen (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(niet samendrukbaar) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(samendrukbaar) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(lokale wijzigingsverhoging) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 kleine bestanden) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrisch gemiddelde** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(niet samendrukbaar) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(samendrukbaar) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(lokale wijzigingsverhoging) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 kleine bestanden) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrisch gemiddelde** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P dual-source-modus versus `rsync`
 
 | Gegevensset | maat | `sync0` P2P dubbele bron<br>(Mbps) | `rsync`<br>(Mbps) | Versnellen (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(niet samendrukbaar) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(samendrukbaar) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(lokale wijzigingsverhoging) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 kleine bestanden) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrisch gemiddelde** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(niet samendrukbaar) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(samendrukbaar) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(lokale wijzigingsverhoging) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 kleine bestanden) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrisch gemiddelde** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Opmerking: in de P2P dual-source-modus werken Europese knooppunten `s1` samen voor het seeden, en is de cross-continentale backbone RTT 65 ms.
 

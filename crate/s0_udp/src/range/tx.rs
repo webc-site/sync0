@@ -270,7 +270,7 @@ impl<'a> SendCtx<'a> {
       self.last_backoff_us = now;
       self
         .pacer
-        .set_rate((self.pacer.rate() * 7 / 8).max(2_500_000));
+        .set_rate((self.pacer.rate() * 3 / 4).max(250_000));
     }
     Ok(bytes)
   }
@@ -292,10 +292,13 @@ impl<'a> SendCtx<'a> {
       && done_bytes > self.rate_win_bytes
     {
       let rx_rate = (done_bytes - self.rate_win_bytes) * 1_000_000 / elapsed.max(1);
-      let target = (rx_rate * 5 / 4).clamp(2_500_000, 120_000_000);
-      self
-        .pacer
-        .set_rate((self.pacer.rate().max(target) + target * 2) / 3);
+      let target = (rx_rate * 5 / 4).clamp(250_000, 120_000_000);
+      let next_rate = if target >= self.pacer.rate() {
+        target
+      } else {
+        (self.pacer.rate() + target * 2) / 3
+      };
+      self.pacer.set_rate(next_rate);
       self.rate_win_start_us = now;
       self.rate_win_bytes = done_bytes;
     }

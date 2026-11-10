@@ -126,7 +126,7 @@ fn send_inner_sock(
   let full_nblk =
     u32::try_from(full_total.div_ceil(MAX_BLOCK as u64)).map_err(|_| WireError::Overflow)?;
   let is_loop = peer.ip().is_loopback();
-  let init_pkt = if is_tunnel_path(sock, peer) && var_os("S0_FORCE_1200").is_some() {
+  let init_pkt = if is_tunnel_path(sock, peer) {
     TUNNEL_PKT
   } else {
     DEFAULT_PKT
@@ -177,7 +177,7 @@ fn send_inner_sock(
 
   let mut sender = Sender::new(RING, 0)?;
   if !is_loop && manifest_rtt > 0 {
-    sender.seed_rtt(manifest_rtt.min(80_000));
+    sender.seed_rtt(manifest_rtt);
   }
   let start_dbg = now_us();
   let mut tx = Tx {

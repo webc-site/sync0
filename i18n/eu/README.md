@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` `rsync` ordezkatzeko erabiltzen den P2P fitxategiak partekatzeko, denbora errealeko sinkronizazioa eta iturri anitzeko banaketa tresna deszentralizatua da. Eremu zabaleko sare transkontinentalaren neurtutako abiadura `rsync`-ren **6,95×** artekoa da (puntu bakarreko batez besteko abiadura geometrikoa **2,01×**), P2P × 3×3 sinkronizazio-abiadura geometrikoa eta **3-iturburuaren batez bestekoa. ozeanoetan zehar fitxategi txiki masiboak **7,19×** bezain azkarrak dira.
+`sync0` `rsync` ordezkatzeko erabiltzen den P2P fitxategiak partekatzeko, denbora errealeko sinkronizazioa eta iturri anitzeko banaketa tresna deszentralizatua da - WAN transkontinentalaren neurtutako abiadura `rsync`ren **5,89×** (puntu bakarreko batez besteko abiadura geometrikoa **2,67×**, P2P batez besteko abiadura **-36) eta trans-16ko batez besteko abiadura **. latentzia handiko lotura P2P azelerazioa **7,68×** artekoa da (24 agertokiko lotura osoko batez besteko abiadura geometriko osoa **2,56×**).
 
 Makina bakoitza zerbitzari bat eta bezero bat da: ez dago zerbitzari zentral bat edo sare publikoko helbiderik behar, zulo-zulaketa automatikoa sare banatutako gako publikoaren helbidean oinarritzen da, eta bi makinen arteko zuzeneko transmisioa onartzen du, partekatzeko talde anitzeko baimena ostatzea, azpidirektorioen aukeraketa anitz eskaeraren arabera, milisegundo-mailako denbora errealeko sinkronizazio inkrementala eta P2P iturri anitzeko azelerazioa.
 
@@ -154,21 +154,21 @@ Benetako neurketa ingurunea: Estatu Batuak `c1` → Europa `n1` (RTT 65 ms), dat
 
 | Datu multzoa | tamaina | `sync0` Puntu bakarra<br>(Mbps) | `rsync`<br>(Mbps) | Bizkortzea (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ez da konprimigarria) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(konprimagarria) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(tokiko aldaketaren gehikuntza) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 fitxategi txiki) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **batez besteko geometrikoa** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(ez da konprimigarria) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(konprimagarria) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(tokiko aldaketaren gehikuntza) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 fitxategi txiki) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **batez besteko geometrikoa** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P iturri bikoitzeko modua vs `rsync`
 
 | Datu multzoa | tamaina | `sync0` P2P iturri bikoitza<br>(Mbps) | `rsync`<br>(Mbps) | Bizkortzea (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ez da konprimigarria) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(konprimagarria) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(tokiko aldaketaren gehikuntza) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 fitxategi txiki) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **batez besteko geometrikoa** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(ez da konprimigarria) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(konprimagarria) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(tokiko aldaketaren gehikuntza) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 fitxategi txiki) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **batez besteko geometrikoa** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Oharra: P2P iturburu bikoitzeko moduan, Europako nodo `s1` elkarlanean aritzen dira hazietarako, eta kontinente gurutzatuaren bizkarrezurra RTT 65 ms-koa da.
 

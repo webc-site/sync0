@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` është një mjet i decentralizuar i ndarjes së skedarëve P2P, sinkronizimit në kohë reale dhe shpërndarjes me shumë burime, i përdorur për të zëvendësuar `rsync` - shpejtësia e matur e rrjetit të zonës së gjerë transkontinentale është deri në **6,95×** e `rsync` (shpejtësia mesatare gjeometrike me një pikë*, shpejtësia mesatare duometrike*2,01 P **3,33×**), dhe sinkronizimi i skedarëve të vegjël masiv nëpër oqeane është aq i shpejtë sa **7,19×**.
+`sync0` është një mjet i decentralizuar i ndarjes së skedarëve P2P, sinkronizimit në kohë reale dhe shpërndarjes me shumë burime, i përdorur për të zëvendësuar `rsync` - shpejtësia e matur e WAN transkontinentale është deri në `rsync`'s **5,89×** (me një pikë, shpejtësia mesatare gjeometrike me një burim **, shpejtësia mesatare e dyfishtë P2,62P×** **3,16×**), dhe përshpejtimi P2P i lidhjes me vonesë të lartë transoqeanike është deri në **7,68×** (Shpejtësia mesatare gjeometrike e plotë me 24 skenarë me lidhje të plotë **2,56×**).
 
 Çdo makinë është njëkohësisht një server dhe një klient: nuk ka nevojë për një server qendror ose një adresë rrjeti publik, hapja automatike e vrimave bazohet në adresën e çelësit publik të rrjetit të shpërndarë dhe mbështet transmetimin e drejtpërdrejtë midis dy makinave, pritjen e lejeve të grupit me shumë ndarje, përzgjedhje të shumëfishtë të nëndrejtorive sipas kërkesës, sinkronizim me shumë burime rritëse në kohë reale të nivelit milisekonda dhe P2P.
 
@@ -154,21 +154,21 @@ Mjedisi aktual i matjes: Shtetet e Bashkuara `c1` → Evropë `n1` (RTT 65 ms), 
 
 | Kompleti i të dhënave | madhësia | `sync0` Pika e vetme<br>(Mbps) | `rsync`<br>(Mbps) | Përshpejtimi (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(jo i kompresueshëm) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(i kompresueshëm) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(rritje lokale e ndryshimit) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95,979 skedarë të vegjël) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **mesatarja gjeometrike** | - | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(jo i kompresueshëm) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(i kompresueshëm) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(rritje lokale e ndryshimit) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95,979 skedarë të vegjël) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **mesatarja gjeometrike** | - | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) Modaliteti me burim të dyfishtë P2P kundrejt `rsync`
 
 | Kompleti i të dhënave | madhësia | `sync0` Burimi i dyfishtë P2P<br>(Mbps) | `rsync`<br>(Mbps) | Përshpejtimi (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(jo i kompresueshëm) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(i kompresueshëm) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(rritje lokale e ndryshimit) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95,979 skedarë të vegjël) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **mesatarja gjeometrike** | - | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(jo i kompresueshëm) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(i kompresueshëm) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(rritje lokale e ndryshimit) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95,979 skedarë të vegjël) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **mesatarja gjeometrike** | - | **1,186.42** | 375.26 | **3,16×** |
 
 > Shënim: Në modalitetin me burim të dyfishtë P2P, nyjet evropiane `s1` bashkëpunojnë për mbjellje, dhe shtylla kurrizore ndër-kontinentale RTT është 65 ms.
 

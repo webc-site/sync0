@@ -1,6 +1,6 @@
 # sync0
 
-Mae `sync0` yn offeryn rhannu ffeiliau P2P datganoledig, cydamseru amser real a dosbarthu aml-ffynhonnell a ddefnyddir i ddisodli `rsync` - mae cyflymder mesuredig y rhwydwaith ardal eang traws-gyfandirol hyd at **6.95×** o `rsync` (cyflymder cyfartalog geometrig un pwynt **2.01×**, cyflymder cydamseru geometrig ****3" enfawr, a chyflymder deuol ffynhonnell geometrig P33P3. mae ffeiliau bach ar draws cefnforoedd mor gyflym â **7.19×**.
+Mae `sync0` yn offeryn rhannu ffeiliau P2P datganoledig, cydamseru amser real a dosbarthu aml-ffynhonnell a ddefnyddir i ddisodli `rsync` - mae cyflymder mesuredig WAN traws-gyfandirol hyd at `rsync` ** 5.89 × ** (cyflymder cyfartalog geometrig pwynt sengl **2.67 ×**, cyflymder geometrig ffynhonnell ddeuol P2P**3 uchel), cyflymder geometrig deuol-ffynhonnell uchel. Mae cyflymiad P2P hyd at **7.68 × ** (cyflymder cymedrig geometrig cynhwysfawr 24-senario cyswllt llawn ** 2.56 ×**).
 
 Mae pob peiriant yn weinydd ac yn gleient: nid oes angen gweinydd canolog na chyfeiriad rhwydwaith cyhoeddus, mae dyrnu twll awtomatig yn seiliedig ar gyfeiriad allwedd cyhoeddus y rhwydwaith dosbarthedig, ac mae'n cefnogi trosglwyddiad uniongyrchol rhwng dau beiriant, cynnal caniatâd grŵp aml-rannu, dewis lluosog o is-gyfeiriaduron yn ôl y galw, cydamseru cynyddrannol amser real lefel milieiliad a chyflymiad cydamserol aml-ffynhonnell P2P.
 
@@ -154,21 +154,21 @@ Amgylchedd mesur gwirioneddol: Unol Daleithiau `c1` → Europe `n1` (RTT 65 ms),
 
 | Set ddata | maint | `sync0` Pwynt Sengl<br>(Mbps) | `rsync`<br>(Mbps) | Cyflymder (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz` (ddim yn gywasgadwy) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar` (cywasgadwy) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar` (cynyddiad newid lleol) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95,979 o ffeiliau bach) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **cymedr geometrig** | - | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz` (ddim yn gywasgadwy) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar` (cywasgadwy) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar` (cynyddiad newid lleol) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95,979 o ffeiliau bach) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| **cymedr geometrig** | - | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) Modd ffynhonnell ddeuol P2P yn erbyn `rsync`
 
 | Set ddata | maint | `sync0` Ffynhonnell Ddeuol P2P<br>(Mbps) | `rsync`<br>(Mbps) | Cyflymder (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz` (ddim yn gywasgadwy) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar` (cywasgadwy) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar` (cynyddiad newid lleol) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95,979 o ffeiliau bach) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| **cymedr geometrig** | - | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz` (ddim yn gywasgadwy) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar` (cywasgadwy) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar` (cynyddiad newid lleol) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 o ffeiliau bach) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **cymedr geometrig** | - | **1,186.42** | 375.26 | **3.16×** |
 
 > Nodyn: Yn y modd ffynhonnell ddeuol P2P, mae nodau Ewropeaidd `s1` yn cydweithio ar gyfer hadu, ac mae'r asgwrn cefn traws-gyfandirol RTT yn 65 ms.
 

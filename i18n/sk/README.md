@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` je decentralizovaný nástroj na zdieľanie P2P súborov, synchronizáciu v reálnom čase a viaczdrojovú distribúciu, ktorý nahrádza `rsync` - nameraná rýchlosť transkontinentálnej siete je až **6,95×** z `rsync` (jednobodová geometrická priemerná rýchlosť **2,01×**, priemerná rýchlosť P2P je** 3** malých geometrických súborov 3× priemerná rýchlosť oceánu 3** tak rýchlo ako **7,19×**.
+`sync0` je decentralizovaný nástroj na zdieľanie súborov P2P, synchronizáciu v reálnom čase a viaczdrojový distribučný nástroj, ktorý sa používa na nahradenie `rsync` – nameraná rýchlosť transkontinentálnej siete WAN je až `rsync` **5,89×** (jednobodová geometrická priemerná rýchlosť **2,67×**), vysoká geometrická rýchlosť pripojenia P2P.2.P1-6× latencia**3 zrýchlenie je až **7,68×** (Full-link 24-scenár komplexnej geometrickej strednej rýchlosti **2,56×**).
 
 Každý stroj je serverom aj klientom: nie je potrebný centrálny server ani verejná sieťová adresa, automatické dierovanie je založené na adrese distribuovaného sieťového verejného kľúča a podporuje priamy prenos medzi dvoma strojmi, hosťovanie povolení skupiny zdieľania, viacnásobný výber podadresárov na požiadanie, prírastkovú synchronizáciu na úrovni milisekúnd v reálnom čase a viaczdrojové súbežné zrýchlenie P2P.
 
@@ -154,21 +154,21 @@ Aktuálne prostredie merania: Spojené štáty `c1` → Európa `n1` (RTT 65 ms)
 
 | Súbor údajov | veľkosť | `sync0` Jeden bod<br>(Mb/s) | `rsync`<br>(Mbps) | Zrýchlenie (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nestlačiteľné) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(stlačiteľné) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(prírastok miestnej zmeny) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 malých súborov) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrický priemer** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nestlačiteľné) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(stlačiteľné) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(prírastok miestnej zmeny) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 malých súborov) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrický priemer** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P režim s dvoma zdrojmi vs `rsync`
 
 | Súbor údajov | veľkosť | `sync0` Duálny zdroj P2P<br>(Mb/s) | `rsync`<br>(Mbps) | Zrýchlenie (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nestlačiteľné) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(stlačiteľné) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(prírastok miestnej zmeny) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 malých súborov) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrický priemer** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nestlačiteľné) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(stlačiteľné) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(prírastok miestnej zmeny) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 malých súborov) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrický priemer** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Poznámka: V režime s dvoma zdrojmi P2P európske uzly `s1` spolupracujú pri nasadzovaní a medzikontinentálna chrbticová RTT je 65 ms.
 

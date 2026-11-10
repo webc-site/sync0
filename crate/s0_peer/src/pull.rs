@@ -15,8 +15,8 @@ use parking_lot::Mutex;
 use s0_cdc::encode_roaring_bits;
 pub(crate) use s0_const::derive_session_id;
 use s0_const::{
-  HASH_LEN, LEECH_MIN_BLOCKS, Op, PROTO_VERSION, SHARE_ID_LEN, Status, TOKEN_LEN,
-  V6_PREFER_MARGIN_US, ZERO_PEER_ID, macro_piece_blocks, region::Region,
+  HASH_LEN, Op, PROTO_VERSION, SHARE_ID_LEN, Status, TOKEN_LEN, V6_PREFER_MARGIN_US, ZERO_PEER_ID,
+  region::Region,
 };
 use s0_fs::SharedSink;
 use s0_udp::{RangeSpec, UdpError, bind_udp_for_ip, punch_udp_with_peer_ip, recv_range_udp};
@@ -432,7 +432,6 @@ fn try_steal_tail(
   bounds: &[(AtomicU32, AtomicU32)],
   thief: &SwarmPeer,
 ) -> Option<(u32, u32)> {
-  let min_steal = macro_piece_blocks(sink.total_blocks()).max(MIN_STEAL_BLOCKS);
   let mut best: Option<(usize, u32, u32, u64)> = None;
   for (idx, (lo_atom, hi_atom)) in bounds.iter().enumerate() {
     let lo = lo_atom.load(Ordering::Acquire);
@@ -450,14 +449,19 @@ fn try_steal_tail(
       lo_atom.fetch_max(first_missing, Ordering::Release);
     }
     let rem = hi.saturating_sub(first_missing);
-    if rem >= LEECH_MIN_BLOCKS && (rem >= min_steal || rem_bytes >= MIN_STEAL_BYTES) {
-      let mid = first_missing + (rem >> 1);
-      if thief.blk_lo <= mid
-        && thief.blk_hi >= hi
-        && best.is_none_or(|(_, _, _, best_bytes)| rem_bytes > best_bytes)
-      {
-        best = Some((idx, mid, hi, rem_bytes));
-      }
+    if rem == 0 {
+      continue;
+    }
+    let mid = if rem >= MIN_STEAL_BLOCKS || rem_bytes >= MIN_STEAL_BYTES {
+      first_missing + (rem >> 1).max(1)
+    } else {
+      first_missing
+    };
+    if thief.blk_lo <= mid
+      && thief.blk_hi >= hi
+      && best.is_none_or(|(_, _, _, best_bytes)| rem_bytes > best_bytes)
+    {
+      best = Some((idx, mid, hi, rem_bytes));
     }
   }
   let (target_idx, mid, hi, _) = best?;

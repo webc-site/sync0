@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` este un instrument descentralizat de partajare a fișierelor P2P, de sincronizare în timp real și de distribuție multi-sursă folosit pentru a înlocui `rsync` - viteza măsurată a rețelei transcontinentale de suprafață este de până la **6,95×** de `rsync` (viteză medie geometrică într-un singur punct **2,01×**), viteza medie geometrică de sincronizare **2,01×**, P2P3 × **-sursă. fișiere masive mici peste oceane este la fel de rapidă ca **7,19×**.
+`sync0` este un instrument descentralizat de partajare a fișierelor P2P, de sincronizare în timp real și de distribuție multi-sursă folosit pentru a înlocui `rsync` - viteza măsurată a WAN-ului transcontinental este de până la **5,89×** a lui `rsync` (viteză medie geometrică într-un singur punct **2,67×**, viteză medie P2P duală **-sursă 3o, geometrică **-cea . Accelerația P2P a legăturii cu latență ridicată este de până la **7,68×** (viteza medie geometrică cuprinzătoare cu 24 de scenarii pentru legătura completă **2,56×**).
 
 Fiecare mașină este atât un server, cât și un client: nu este nevoie de un server central sau de o adresă de rețea publică, perforarea automată se bazează pe adresa cheii publice de rețea distribuită și acceptă transmisia directă între două mașini, găzduire cu permisiuni de grup de partajare multiple, selecție multiplă de subdirectoare la cerere, sincronizare incrementală în timp real la nivel de milisecunde și accelerare simultană P2P multi-surse.
 
@@ -154,21 +154,21 @@ Mediu real de măsurare: Statele Unite `c1` → Europa `n1` (RTT 65 ms), setul d
 
 | Set de date | dimensiune | `sync0` Punct unic<br>(Mbps) | `rsync`<br>(Mbps) | Accelerare (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nu este compresibil) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(compresibil) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(increment de modificare locală) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 fișiere mici) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **medie geometrică** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(nu este compresibil) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(compresibil) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(increment de modificare locală) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 fișiere mici) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **medie geometrică** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) Modul P2P cu sursă duală față de `rsync`
 
 | Set de date | dimensiune | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Accelerare (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nu este compresibil) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(compresibil) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(increment de modificare locală) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 fișiere mici) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **medie geometrică** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nu este compresibil) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(compresibil) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(increment de modificare locală) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 fișiere mici) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **medie geometrică** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Notă: în modul P2P cu sursă duală, nodurile europene `s1` colaborează pentru însămânțare, iar RTT-ul intercontinental este de 65 ms.
 

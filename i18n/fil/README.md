@@ -1,6 +1,6 @@
 # sync0
 
-Ang `sync0` ay isang desentralisadong P2P file sharing, real-time na pag-synchronize at multi-source distribution tool na ginagamit upang palitan ang `rsync` - ang sinusukat na bilis ng transcontinental wide area network ay hanggang **6.95×** ng `rsync` (single-point geometric average na bilis **2.01×**. P2c3 average na bilis **2.01×**, P2c3 na average na bilis ******, P2c3 na pinagmumulan. Ang pag-synchronize ng napakalaking maliliit na file sa mga karagatan ay kasing bilis ng **7.19×**.
+Ang `sync0` ay isang desentralisadong P2P file sharing, real-time na pag-synchronize at multi-source distribution tool na ginagamit para palitan ang `rsync` - ang sinusukat na bilis ng transcontinental WAN ay hanggang sa `rsync`'s **5.89×** (single point geometric average speed **2.67×**, geometric average na bilis ng ****, P2P×an transkontinente ****, P2P average na bilis ****, at P2P. Ang high-latency link P2P acceleration ay hanggang **7.68×** (Full-link 24-scenario comprehensive geometric mean speed **2.56×**).
 
 Ang bawat makina ay parehong server at isang kliyente: hindi na kailangan para sa isang sentral na server o isang pampublikong network address, ang awtomatikong pagsuntok ng butas ay batay sa ipinamahagi na network ng pampublikong key address, at ito ay sumusuporta sa direktang paghahatid sa pagitan ng dalawang makina, multi-sharing group permission hosting, maraming seleksyon ng mga subdirectory on demand, millisecond-level real-time incremental synchronization at P2P multi-source concurrent a.
 
@@ -154,21 +154,21 @@ Aktwal na kapaligiran sa pagsukat: United States `c1` → Europe `n1` (RTT 65 ms
 
 | Set ng data | laki | `sync0` Isang Punto<br>(Mbps) | `rsync`<br>(Mbps) | Bilis (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(hindi compressible) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(compressible) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(lokal na pagtaas ng pagbabago) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95,979 maliliit na file) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| **geometric mean** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(hindi compressible) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(compressible) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(lokal na pagtaas ng pagbabago) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95,979 maliliit na file) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| **geometric mean** | — | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) P2P dual-source mode vs `rsync`
 
 | Set ng data | laki | `sync0` P2P Dual Source<br>(Mbps) | `rsync`<br>(Mbps) | Bilis (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(hindi compressible) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(compressible) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(lokal na pagtaas ng pagbabago) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95,979 maliliit na file) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| **geometric mean** | — | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(hindi compressible) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(compressible) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(lokal na pagtaas ng pagbabago) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95,979 maliliit na file) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| **geometric mean** | — | **1,186.42** | 375.26 | **3.16×** |
 
 > Tandaan: Sa P2P dual-source mode, ang mga European node `s1` ay nagtutulungan para sa seeding, at ang cross-continental backbone RTT ay 65 ms.
 

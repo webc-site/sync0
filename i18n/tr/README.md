@@ -1,6 +1,6 @@
 # sync0
 
-`sync0`, merkezi olmayan bir P2P dosya paylaşımı, gerçek zamanlı senkronizasyon ve `rsync`'nin yerine kullanılan çok kaynaklı dağıtım aracıdır - kıtalararası geniş alan ağının ölçülen hızı <b id=3">'in **6,95×**'ine kadardır (tek nokta geometrik ortalama hız **2,01×**, P2P çift kaynaklı geometrik ortalama hız **3,33×**) ve çok büyük küçük dosyaların dünya genelinde senkronizasyonu okyanuslar **7,19×** kadar hızlıdır.
+`sync0`, `rsync`'nin yerine kullanılan, merkezi olmayan bir P2P dosya paylaşımı, gerçek zamanlı senkronizasyon ve çok kaynaklı dağıtım aracıdır - kıtalararası WAN'ın ölçülen hızı `rsync`'nin **5,89×** (tek nokta geometrik ortalama hızı **2,67×**, P2P çift kaynaklı geometrik ortalama hızı **3,16×**) ve okyanus ötesi yüksek gecikmeli bağlantıdır P2P hızlandırma **7,68×**'ye kadardır (Tam bağlantı 24 senaryolu kapsamlı geometrik ortalama hız **2,56×**).
 
 Her makine hem bir sunucu hem de bir istemcidir: merkezi bir sunucuya veya genel ağ adresine gerek yoktur, otomatik delik açma, dağıtılmış ağ genel anahtar adresine dayanır ve iki makine arasında doğrudan iletimi, çoklu paylaşımlı grup izinli barındırmayı, talep üzerine çoklu alt dizin seçimini, milisaniye düzeyinde gerçek zamanlı artımlı senkronizasyonu ve P2P çok kaynaklı eşzamanlı hızlandırmayı destekler.
 
@@ -154,21 +154,21 @@ Gerçek ölçüm ortamı: Amerika Birleşik Devletleri `c1` → Avrupa `n1` (RTT
 
 | Veri seti | boyut | `sync0` Tek Nokta<br>(Mbps) | `rsync`<br>(Mbps) | Hızlandırma (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(sıkıştırılamaz) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(sıkıştırılabilir) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(yerel değişiklik artışı) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 küçük dosya) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrik ortalama** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(sıkıştırılamaz) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(sıkıştırılabilir) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(yerel değişiklik artışı) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 küçük dosya) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrik ortalama** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P çift kaynak modu vs `rsync`
 
 | Veri seti | boyut | `sync0` P2P Çift Kaynak<br>(Mbps) | `rsync`<br>(Mbps) | Hızlandırma (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(sıkıştırılamaz) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(sıkıştırılabilir) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(yerel değişiklik artışı) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 küçük dosya) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrik ortalama** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(sıkıştırılamaz) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(sıkıştırılabilir) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(yerel değişiklik artışı) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 küçük dosya) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrik ortalama** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Not: P2P çift kaynak modunda, Avrupa düğümleri `s1` tohumlama için işbirliği yapar ve kıtalar arası omurga RTT'si 65 ms'dir.
 

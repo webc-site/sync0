@@ -190,6 +190,22 @@ fn test_fastcdc_and_manifest_subpath() -> Void {
       delta_in_place.reused_bytes + delta_in_place.delta_bytes,
       modified.len() as u64
     );
+
+    // 测试长周期重复文本（Gear 滚哈全程触发 max_size 边界且总长非 64 KiB 整数倍）在多线程下与单线程切片 100% 一致
+    let pat = b"static inline int sync0_kernel_sched_tick(unsigned long cpu, unsigned long flags, unsigned long jiffies) { return 0; }\n";
+    let periodic_len = 9 * 1024 * 1024 + 35_840;
+    let mut periodic = Vec::with_capacity(periodic_len);
+    while periodic.len() < periodic_len {
+      let rem = periodic_len - periodic.len();
+      periodic.extend_from_slice(&pat[..rem.min(pat.len())]);
+    }
+    let p_per = temp_dir().join("s0_cdc_periodic_test.bin");
+    write(&p_per, &periodic)?;
+    let f_per = File::open(&p_per)?;
+    let par_per = chunk_file(&f_per, periodic.len() as u64, CdcConfig::DEFAULT)?;
+    let seq_per = chunk_slice(&periodic, CdcConfig::DEFAULT);
+    let _ = remove_file(&p_per);
+    assert_eq!(par_per, seq_per);
   }
   OK
 }

@@ -130,23 +130,36 @@ pub fn chunk_file_range_with_buf(
     return Ok(out);
   }
 
+  let align = cfg.max_size.max(1) as u64;
   let overlap = (cfg.max_size.saturating_mul(PAR_OVERLAP_BLOCKS)) as u64;
+  let stripe_off = |idx: usize| -> u64 {
+    if idx == 0 {
+      start_off
+    } else if idx >= n_threads {
+      end_off
+    } else {
+      let raw = (span * (idx as u64)) / (n_threads as u64);
+      start_off + (raw / align) * align
+    }
+  };
   let parts: Vec<io::Result<(u64, Vec<ChunkSig>)>> = thread::scope(|s| {
     let mut handles = Vec::with_capacity(n_threads);
     for i in 0..n_threads {
-      let start = start_off + (span * (i as u64)) / (n_threads as u64);
-      let next_start = start_off + (span * ((i + 1) as u64)) / (n_threads as u64);
-      let limit = if i + 1 == n_threads {
+      let start = stripe_off(i);
+      let next_start = stripe_off(i + 1);
+      let stop_off = if i + 1 == n_threads {
         end_off
       } else {
         next_start.saturating_add(overlap).min(end_off)
       };
       handles.push(s.spawn(move || {
         let mut local_buf = Vec::new();
-        let cap = usize::try_from((limit - start) / (cfg.avg_size.max(1) as u64)).unwrap_or(0) + 2;
+        let cap =
+          usize::try_from((stop_off - start) / (cfg.avg_size.max(1) as u64)).unwrap_or(0) + 2;
         let mut v = Vec::with_capacity(cap);
-        for_each_file_chunk_from_with_buf(file, start, limit, cfg, &mut local_buf, |sig| {
-          v.push(sig)
+        for_each_file_chunk_until(file, start, stop_off, end_off, cfg, &mut local_buf, |sig| {
+          v.push(sig);
+          true
         })?;
         Ok((start, v))
       }));
@@ -179,8 +192,9 @@ pub fn chunk_file_range_with_buf(
       out.extend_from_slice(&part[p_idx..]);
       continue;
     }
+    let part_end = part.last().map_or(end_off, |c| c.offset + u64::from(c.len));
     let mut splice_idx = None;
-    for_each_file_chunk_until(file, cur_end, end_off, cfg, buf, |sig| {
+    for_each_file_chunk_until(file, cur_end, part_end, end_off, cfg, buf, |sig| {
       if let Ok(p_idx) = part.binary_search_by_key(&sig.offset, |c| c.offset) {
         splice_idx = Some(p_idx);
         false
@@ -205,7 +219,7 @@ pub(crate) fn for_each_file_chunk_from_with_buf(
   buf: &mut Vec<u8>,
   mut on_sig: impl FnMut(ChunkSig),
 ) -> io::Result<()> {
-  for_each_file_chunk_until(file, start_off, size, cfg, buf, |sig| {
+  for_each_file_chunk_until(file, start_off, size, size, cfg, buf, |sig| {
     on_sig(sig);
     true
   })
@@ -214,24 +228,27 @@ pub(crate) fn for_each_file_chunk_from_with_buf(
 fn for_each_file_chunk_until(
   file: &File,
   start_off: u64,
-  size: u64,
+  stop_off: u64,
+  end_off: u64,
   cfg: CdcConfig,
   buf: &mut Vec<u8>,
   mut on_sig: impl FnMut(ChunkSig) -> bool,
 ) -> io::Result<()> {
-  if start_off >= size {
+  let stop_off = stop_off.min(end_off);
+  if start_off >= stop_off {
     return Ok(());
   }
-  let rem_size = size - start_off;
-  if rem_size <= cfg.min_size as u64 {
-    let n = rem_size as usize;
+  let read_end = stop_off.saturating_add(cfg.max_size as u64).min(end_off);
+  let rem_size = read_end - start_off;
+  if end_off - start_off <= cfg.min_size as u64 {
+    let n = (end_off - start_off) as usize;
     if buf.len() < n {
       buf.resize(n, 0);
     }
     file.read_exact_at_pos(&mut buf[..n], start_off)?;
     let _ = on_sig(ChunkSig {
       offset: start_off,
-      len: rem_size as u32,
+      len: n as u32,
       hash: hash128(&buf[..n]),
     });
     return Ok(());
@@ -246,9 +263,9 @@ fn for_each_file_chunk_until(
   let mut file_pos = start_off;
   let mut chunk_off = start_off;
 
-  loop {
-    if filled < cfg.max_size && file_pos < size {
-      let to_read = ((buf_cap - filled) as u64).min(size - file_pos) as usize;
+  while chunk_off < stop_off {
+    if filled < cfg.max_size && file_pos < read_end {
+      let to_read = ((buf_cap - filled) as u64).min(read_end - file_pos) as usize;
       file.read_exact_at_pos(&mut buf[filled..filled + to_read], file_pos)?;
       filled += to_read;
       file_pos += to_read as u64;
@@ -256,9 +273,9 @@ fn for_each_file_chunk_until(
     if filled == 0 {
       break;
     }
-    let eof = file_pos >= size;
+    let eof = file_pos >= end_off;
     let mut pos = 0usize;
-    while filled - pos >= cfg.max_size || (eof && pos < filled) {
+    while chunk_off < stop_off && (filled - pos >= cfg.max_size || (eof && pos < filled)) {
       let cut = find_boundary(&buf[pos..filled], cfg);
       let slice = &buf[pos..pos + cut];
       if !on_sig(ChunkSig {
@@ -271,10 +288,11 @@ fn for_each_file_chunk_until(
       chunk_off += cut as u64;
       pos += cut;
     }
-    if pos > 0 {
-      buf.copy_within(pos..filled, 0);
-      filled -= pos;
+    if pos == 0 {
+      break;
     }
+    buf.copy_within(pos..filled, 0);
+    filled -= pos;
   }
   Ok(())
 }

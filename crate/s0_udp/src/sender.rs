@@ -86,7 +86,7 @@ impl Sender {
   }
 
   pub fn seed_rtt(&mut self, sample_us: u64) {
-    self.rtt.on_sample(sample_us);
+    self.rtt.seed_srtt(sample_us);
   }
 
   pub const fn delivered(&self) -> u64 {

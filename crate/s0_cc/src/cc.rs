@@ -20,6 +20,7 @@ const MIN_GAP_US: u64 = 6;
 const MAX_GAP_US: u64 = 100_000;
 /// 在途包窗口上下限
 const MIN_CWND_PKTS: u64 = 256;
+const MIN_SLOW_CWND_PKTS: u64 = 32;
 const MAX_CWND_PKTS: u64 = 49_152;
 /// 高丢包：本轮丢包率 > 1/12
 const HIGH_LOSS_DIV: u64 = 12;
@@ -254,11 +255,11 @@ impl Cc {
   pub const fn init_gap_us(rtt_us: u64, sent_pkts: u64) -> u64 {
     if rtt_us <= 2_000 {
       15
-    } else if rtt_us <= 30_000 || sent_pkts < 32 {
+    } else if rtt_us <= 30_000 || (rtt_us <= 120_000 && sent_pkts < 32) {
       35
-    } else if rtt_us <= 100_000 || sent_pkts < CHIRP_PKTS {
+    } else if rtt_us <= 100_000 || sent_pkts < 32 {
       75
-    } else if rtt_us <= 500_000 {
+    } else if rtt_us <= 120_000 || sent_pkts < CHIRP_PKTS {
       125
     } else {
       250
@@ -299,13 +300,24 @@ impl Cc {
     match self.cwnd_bytes(rtt) {
       Some(b) => {
         let p = if pkt_size > 0 { pkt_size } else { 1 };
-        clamp(b / p, MIN_CWND_PKTS, MAX_CWND_PKTS)
+        let floor = if self.high_loss || rtt.srtt_us() > 120_000 {
+          MIN_SLOW_CWND_PKTS
+        } else {
+          MIN_CWND_PKTS
+        };
+        clamp(b / p, floor, MAX_CWND_PKTS)
       }
       None => {
         let rtt_us = rtt.srtt_us();
         let gap = Self::init_gap_us(rtt_us, 0);
-        let max_init = if rtt_us > 100_000 { 640 } else { 2048 };
-        clamp(rtt_us / gap, 512, max_init)
+        let (min_init, max_init) = if rtt_us > 120_000 {
+          (128, 256)
+        } else if rtt_us > 100_000 {
+          (512, 640)
+        } else {
+          (512, 2048)
+        };
+        clamp(rtt_us / gap, min_init, max_init)
       }
     }
   }

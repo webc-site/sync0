@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` là một công cụ phân phối đa nguồn, đồng bộ hóa thời gian thực và chia sẻ tệp P2P phi tập trung được sử dụng để thay thế `rsync` - tốc độ đo được của mạng diện rộng xuyên lục địa lên tới **6,95×** của `rsync` (tốc độ trung bình hình học một điểm **2,01×**, tốc độ trung bình hình học nguồn kép P2P **3,33×**) và quá trình đồng bộ hóa các tệp nhỏ lớn trên khắp các đại dương nhanh như **7,19×**.
+`sync0` là một công cụ chia sẻ tệp P2P phi tập trung, đồng bộ hóa thời gian thực và phân phối đa nguồn được sử dụng để thay thế `rsync` - tốc độ đo được của WAN xuyên lục địa lên tới `rsync`'s **5,89×** (tốc độ trung bình hình học một điểm **2,67×**, tốc độ trung bình hình học nguồn kép P2P **3,16×**) và khả năng tăng tốc P2P của liên kết có độ trễ cao xuyên đại dương lên tới **7,68×** (Tốc độ hình học toàn diện toàn diện cho 24 kịch bản liên kết đầy đủ **2,56×**).
 
 Mỗi máy vừa là máy chủ vừa là máy khách: không cần máy chủ trung tâm hoặc địa chỉ mạng công cộng, tính năng đục lỗ tự động dựa trên địa chỉ khóa công khai của mạng phân tán và hỗ trợ truyền trực tiếp giữa hai máy, lưu trữ quyền nhóm chia sẻ nhiều lần, nhiều lựa chọn thư mục con theo yêu cầu, đồng bộ hóa gia tăng theo thời gian thực ở mức mili giây và tăng tốc đồng thời đa nguồn P2P.
 
@@ -154,21 +154,21 @@ Môi trường đo thực tế: Hoa Kỳ `c1` → Châu Âu `n1` (RTT 65 ms), b�
 
 | Tập dữ liệu | kích cỡ | `sync0` Điểm đơn<br>(Mbps) | `rsync`<br>(Mbps) | Tăng tốc (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(không nén được) | 155 MB | **121.07** | 107.89 | **1,12**** |
-| `linux-7.3.3.tar`(có thể nén được) | 1.6 GB | **442.07** | 506.62 | **0,87***** |
-| `linux-7.3.3.tar`(gia tăng thay đổi cục bộ) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95**** |
-| `linux-7.3.3/` (95.979 tệp nhỏ) | 1.5 GB | **565.49** | 235.27 | **2,40**** |
-| **trung bình hình học** | — | **704.17** | 350.19 | **2,01**** |
+| `linux-7.3.3.tar.xz`(không nén được) | 155 MB | **236.48** | 108.74 | **2,17**** |
+| `linux-7.3.3.tar`(có thể nén được) | 1.6 GB | **843.83** | 385.06 | **2,19**** |
+| `linux-7.3.3.tar`(gia tăng thay đổi cục bộ) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89**** |
+| `linux-7.3.3/` (95.979 tệp nhỏ) | 1.5 GB | **627.58** | 347.80 | **1,80**** |
+| **trung bình hình học** | — | **1,000.91** | 375.26 | **2,67**** |
 
 #### 2) Chế độ nguồn kép P2P so với `rsync`
 
 | Tập dữ liệu | kích cỡ | `sync0` Nguồn kép P2P<br>(Mbps) | `rsync`<br>(Mbps) | Tăng tốc (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(không nén được) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(có thể nén được) | 1.6 GB | **992.17** | 506.62 | **1,96**** |
-| `linux-7.3.3.tar`(gia tăng thay đổi cục bộ) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85**** |
-| `linux-7.3.3/` (95.979 tệp nhỏ) | 1.5 GB | **703.30** | 235.27 | **2,99***** |
-| **trung bình hình học** | — | **1,165.63** | 350.19 | **3,33**** |
+| `linux-7.3.3.tar.xz`(không nén được) | 155 MB | **330.09** | 108.74 | **3,04**** |
+| `linux-7.3.3.tar`(có thể nén được) | 1.6 GB | **1,551.86** | 385.06 | **4.03**** |
+| `linux-7.3.3.tar`(gia tăng thay đổi cục bộ) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02**** |
+| `linux-7.3.3/` (95.979 tệp nhỏ) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **trung bình hình học** | — | **1,186.42** | 375.26 | **3,16**** |
 
 > Lưu ý: Ở chế độ nguồn kép P2P, các nút Châu Âu `s1` cộng tác để gieo hạt và RTT đường trục xuyên lục địa là 65 mili giây.
 

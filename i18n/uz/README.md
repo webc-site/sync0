@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` - markazlashtirilmagan P2P fayl almashish, real vaqtda sinxronlash va ko'p manbali tarqatish vositasi `rsync` o'rnini bosadi - transkontinental keng maydon tarmog'ining o'lchangan tezligi `rsync` dan **6,95×** gacha (bir nuqtali geometrik o'rtacha tezlik **2,01 geometrik manbali, o'rtacha geometrik duxal**-) **3,33×**) va okeanlar bo‘ylab katta hajmdagi kichik fayllarni sinxronlashtirish **7,19×** tezlikka erishadi.
+`sync0` markazlashtirilmagan P2P fayl almashish, real vaqt rejimida sinxronlash va ko'p manbali tarqatish vositasi `rsync` o'rnini bosadi - transkontinental WAN o'lchangan tezligi `rsync` ning **5,89×** (bir nuqta geometrik o'rtacha tezligi **2,67 × 6 **), manba geometrik o'rtacha tezligi **2,67 × 6 **, geometrik o'rtacha tezligi P2. transokeanik yuqori kechikishli havola P2P tezlashuvi **7,68×** gacha (To‘liq havola 24-stsenariy keng qamrovli o‘rtacha geometrik tezlik **2,56×**).
 
 Har bir mashina ham server, ham mijozdir: markaziy server yoki umumiy tarmoq manziliga ehtiyoj yo'q, avtomatik teshik ochish taqsimlangan tarmoq umumiy kalit manziliga asoslanadi va u ikki mashina o'rtasida to'g'ridan-to'g'ri uzatishni, ko'p almashuvli guruh ruxsatini hostingni, talab bo'yicha ko'plab pastki kataloglarni tanlashni, millisekundlik darajadagi real vaqtda ko'p manbali sinxronlashtirishni va P2P ulanishini qo'llab-quvvatlaydi.
 
@@ -154,21 +154,21 @@ Haqiqiy o'lchash muhiti: Amerika Qo'shma Shtatlari `c1` → Evropa `n1` (RTT 65 
 
 | Ma'lumotlar to'plami | hajmi | `sync0` Yagona nuqta<br>(Mbps) | `rsync`<br>(Mbps) | Tezlashtirish (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(siqilib bo'lmaydi) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(siqilishi mumkin) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(mahalliy o'zgarishlarning o'sishi) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 ta kichik fayl) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrik o'rtacha** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(siqilib bo'lmaydi) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(siqilishi mumkin) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(mahalliy o'zgarishlarning o'sishi) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 ta kichik fayl) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrik o'rtacha** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P ikki manba rejimi va `rsync`
 
 | Ma'lumotlar to'plami | hajmi | `sync0` P2P ikkilamchi manba<br>(Mbps) | `rsync`<br>(Mbps) | Tezlashtirish (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(siqilib bo'lmaydi) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(siqilishi mumkin) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(mahalliy o'zgarishlarning o'sishi) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 ta kichik fayl) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrik o'rtacha** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(siqilib bo'lmaydi) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(siqilishi mumkin) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(mahalliy o'zgarishlarning o'sishi) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 ta kichik fayl) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrik o'rtacha** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Eslatma: P2P ikki manba rejimida Yevropa tugunlari `s1` ekish uchun hamkorlik qiladi va qit'alararo magistral RTT 65 ms ni tashkil qiladi.
 

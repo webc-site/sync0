@@ -18,7 +18,7 @@ use s0_const::{
 };
 use s0_fs::{SharedSink, SourceReader, build_manifest_from_paths, sanitize_rel_path};
 use s0_udp::{RangeSpec, bind_udp_for_ip, punch_udp_with_peer_ip, send_range_udp};
-use s0_wire::{P2pReq, P2pResp, SwarmPeer, encode_socket_addrs};
+use s0_wire::{P2pReq, P2pResp, SwarmPeer, decode_socket_addrs, encode_socket_addrs};
 
 use crate::{
   PeerError, PeerId, PeerNode, ShareConfig, SyncReport, TransferOpts, derive_share_id,
@@ -270,7 +270,11 @@ impl PeerNode {
 
     let leech_done = Arc::new(AtomicBool::new(false));
     let dyn_peers: Arc<Mutex<Vec<SwarmPeer>>> = Arc::new(Mutex::new(Vec::new()));
-    if is_full_share && total_blocks >= LEECH_MIN_BLOCKS {
+    let can_seed_peers = self.ctrl_addrs.iter().any(|a| !a.ip().is_loopback())
+      || candidate_peers.iter().all(|p| {
+        decode_socket_addrs(&p.peer_addrs).is_ok_and(|v| v.iter().all(|a| a.ip().is_loopback()))
+      });
+    if is_full_share && total_blocks >= LEECH_MIN_BLOCKS && can_seed_peers {
       let (leech_flag, sink_watch, dyn_ref) = (
         Arc::clone(&leech_done),
         Arc::clone(&sink),

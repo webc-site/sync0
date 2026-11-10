@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` yra decentralizuotas P2P failų dalijimosi, sinchronizavimo realiuoju laiku ir kelių šaltinių paskirstymo įrankis, naudojamas pakeisti `rsync` – išmatuotas transkontinentinio plataus tinklo greitis yra iki **6,95×** iš `rsync` (vieno taško** geometrinis vidutinis greitis **2,01×3 ir 3 vidutinis greitis **2,01×**, P.2). didžiulių mažų failų sinchronizavimas visame vandenyne yra toks pat greitas kaip **7,19 ×**.
+`sync0` yra decentralizuotas P2P failų dalijimosi, sinchronizavimo realiuoju laiku ir kelių šaltinių paskirstymo įrankis, naudojamas pakeisti `rsync` – išmatuotas tarpžemyninio WAN greitis yra iki `rsync` **5,89×** (vieno taško vidutinis geometrinis greitis **2,67×**), P2P.1 ** vidutinis greitis **2,67×**, P2P. Transokeaninis didelės vėlavimo jungties P2P pagreitis yra iki **7,68 ×** (viso ryšio 24 scenarijų išsamus geometrinis vidutinis greitis **2,56 ×**).
 
 Kiekviena mašina yra ir serveris, ir klientas: nereikia centrinio serverio ar viešojo tinklo adreso, automatinis skylių vėrimas pagrįstas paskirstyto tinklo viešojo rakto adresu ir palaiko tiesioginį perdavimą tarp dviejų mašinų, kelių bendrinimo grupių leidimų prieglobą, kelis pakatalogių pasirinkimą pagal poreikį, milisekundžių lygio realiojo laiko laipsnišką sinchronizavimą ir P2P kelių šaltinių vienu metu.
 
@@ -154,21 +154,21 @@ Faktinė matavimo aplinka: Jungtinės Valstijos `c1` → Europa `n1` (RTT 65 ms)
 
 | Duomenų rinkinys | dydis | `sync0` Vienas taškas<br>(Mbps) | `rsync`<br>(Mbps) | Paspartinimas (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nesuglaudinamas) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(suglaudinamas) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(vietinis pakeitimo prieaugis) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95 979 maži failai) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **geometrinis vidurkis** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(nesuglaudinamas) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(suglaudinamas) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(vietinis pakeitimo prieaugis) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95 979 maži failai) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **geometrinis vidurkis** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) P2P dviejų šaltinių režimas ir `rsync`
 
 | Duomenų rinkinys | dydis | `sync0` P2P dvigubas šaltinis<br>(Mbps) | `rsync`<br>(Mbps) | Paspartinimas (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(nesuglaudinamas) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(suglaudinamas) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(vietinis pakeitimo prieaugis) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95 979 maži failai) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **geometrinis vidurkis** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(nesuglaudinamas) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(suglaudinamas) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(vietinis pakeitimo prieaugis) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95 979 maži failai) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **geometrinis vidurkis** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Pastaba: P2P dviejų šaltinių režimu Europos mazgai `s1` bendradarbiauja sėjant, o tarpžemyninio pagrindo RTT yra 65 ms.
 

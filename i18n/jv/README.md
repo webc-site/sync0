@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` minangka fungsi enggo bareng file P2P sing didesentralisasi, sinkronisasi wektu nyata lan alat distribusi multi-sumber sing digunakake kanggo ngganti `rsync` - kacepetan diukur saka jaringan area jembar transcontinental nganti **6.95×** saka `rsync` (titik siji-titik geometris rata-rata kacepetan **2.01×***, kacepetan rata-rata geometris siji-titik **2.01×****, P2P. sinkronisasi file cilik massive tengen segara minangka cepet minangka **7.19×**.
+`sync0` minangka fungsi enggo bareng file P2P sing terdesentralisasi, sinkronisasi wektu nyata lan alat distribusi multi-sumber sing digunakake kanggo ngganti `rsync` - kacepetan WAN transcontinental sing diukur nganti `rsync` **5.89×** (kacepetan rata-rata geometris titik siji **2.67×**, kacepetan trans-sumber ganda P2P × . akselerasi P2P link-latensi dhuwur nganti **7,68×** (Full-link 24-skenario kacepetan rata-rata geometris lengkap **2,56×**).
 
 Saben mesin iku loro server lan klien: ana ora perlu kanggo server tengah utawa alamat jaringan umum, otomatis bolongan punching adhedhasar alamat tombol umum jaringan mbagekke, lan ndhukung transmisi langsung antarane loro mesin, multi-fungsi enggo bareng ijin hosting, sawetara pilihan saka subdirektori ing dikarepake, millisecond-tingkat nyata-wektu sinkronisasi tambahan lan P2P multi-sumber bebarengan a.
 
@@ -154,21 +154,21 @@ Lingkungan pangukuran aktual: Amerika Serikat `c1` → Eropa `n1` (RTT 65 ms), s
 
 | kumpulan data | ukuran | `sync0` Titik Tunggal<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ora bisa dikompres) | 155 MB | **121.07** | 107.89 | **1.12×** |
-| `linux-7.3.3.tar`(bisa dikompres) | 1.6 GB | **442.07** | 506.62 | **0.87×** |
-| `linux-7.3.3.tar`(tambahan owah-owahan lokal) | 1.6 GB | **8,123.87** | 1,169.49 | **6.95×** |
-| `linux-7.3.3/` (95.979 file cilik) | 1.5 GB | **565.49** | 235.27 | **2.40×** |
-| ** tegese geometris ** | — | **704.17** | 350.19 | **2.01×** |
+| `linux-7.3.3.tar.xz`(ora bisa dikompres) | 155 MB | **236.48** | 108.74 | **2.17×** |
+| `linux-7.3.3.tar`(bisa dikompres) | 1.6 GB | **843.83** | 385.06 | **2.19×** |
+| `linux-7.3.3.tar`(tambahan owah-owahan lokal) | 1.6 GB | **8,014.15** | 1,361.72 | **5.89×** |
+| `linux-7.3.3/` (95.979 file cilik) | 1.5 GB | **627.58** | 347.80 | **1.80×** |
+| ** tegese geometris ** | — | **1,000.91** | 375.26 | **2.67×** |
 
 #### 2) Mode dual-sumber P2P vs `rsync`
 
 | kumpulan data | ukuran | `sync0` Sumber Ganda P2P<br>(Mbps) | `rsync`<br>(Mbps) | Speedup (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(ora bisa dikompres) | 155 MB | **466.85** | 107.89 | **4.33×** |
-| `linux-7.3.3.tar`(bisa dikompres) | 1.6 GB | **992.17** | 506.62 | **1.96×** |
-| `linux-7.3.3.tar`(tambahan owah-owahan lokal) | 1.6 GB | **5,666.84** | 1,169.49 | **4.85×** |
-| `linux-7.3.3/` (95.979 file cilik) | 1.5 GB | **703.30** | 235.27 | **2.99×** |
-| ** tegese geometris ** | — | **1,165.63** | 350.19 | **3.33×** |
+| `linux-7.3.3.tar.xz`(ora bisa dikompres) | 155 MB | **330.09** | 108.74 | **3.04×** |
+| `linux-7.3.3.tar`(bisa dikompres) | 1.6 GB | **1,551.86** | 385.06 | **4.03×** |
+| `linux-7.3.3.tar`(tambahan owah-owahan lokal) | 1.6 GB | **5,474.17** | 1,361.72 | **4.02×** |
+| `linux-7.3.3/` (95.979 file cilik) | 1.5 GB | **706.56** | 347.80 | **2.03×** |
+| ** tegese geometris ** | — | **1,186.42** | 375.26 | **3.16×** |
 
 > Cathetan: Ing mode dual-source P2P, node Eropa `s1` kolaborasi kanggo seeding, lan RTT backbone cross-continental yaiku 65 ms.
 

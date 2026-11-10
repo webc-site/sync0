@@ -1,6 +1,6 @@
 # sync0
 
-`sync0` es una herramienta descentralizada para compartir archivos P2P, sincronización en tiempo real y distribución de fuentes múltiples que se utiliza para reemplazar a `rsync`: la velocidad medida de la red de área amplia transcontinental es de hasta **6,95×** de `rsync` (velocidad promedio geométrica de un solo punto **2,01×**, velocidad promedio geométrica P2P de doble fuente **3,33×**), y la sincronización de archivos masivos pequeños archivos a través de océanos es tan rápido como **7,19×**.
+`sync0` es una herramienta descentralizada para compartir archivos P2P, sincronización en tiempo real y distribución de fuentes múltiples que se utiliza para reemplazar a `rsync`. La velocidad medida de la WAN transcontinental es de hasta **5,89×** de `rsync` (velocidad promedio geométrica de un solo punto **2,67×**, velocidad promedio geométrica geométrica de doble fuente P2P **3,16×**) y enlace transoceánico de alta latencia. La aceleración P2P es de hasta **7,68×** (velocidad media geométrica integral de enlace completo de 24 escenarios **2,56×**).
 
 Cada máquina es a la vez un servidor y un cliente: no hay necesidad de un servidor central o una dirección de red pública, la perforación automática se basa en la dirección de clave pública de la red distribuida y admite la transmisión directa entre dos máquinas, alojamiento de permisos de grupo de uso compartido múltiple, selección múltiple de subdirectorios bajo demanda, sincronización incremental en tiempo real a nivel de milisegundos y aceleración simultánea de múltiples fuentes P2P.
 
@@ -154,21 +154,21 @@ Entorno de medición real: Estados Unidos `c1` → Europa `n1` (RTT 65 ms), el c
 
 | conjunto de datos | tamaño | `sync0` Punto único<br>(Mbps) | `rsync`<br>(Mbps) | Aceleración (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(no comprimible) | 155 MB | **121.07** | 107.89 | **1,12×** |
-| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **442.07** | 506.62 | **0,87×** |
-| `linux-7.3.3.tar`(incremento de cambio local) | 1.6 GB | **8,123.87** | 1,169.49 | **6,95×** |
-| `linux-7.3.3/` (95.979 archivos pequeños) | 1.5 GB | **565.49** | 235.27 | **2,40×** |
-| **media geométrica** | — | **704.17** | 350.19 | **2,01×** |
+| `linux-7.3.3.tar.xz`(no comprimible) | 155 MB | **236.48** | 108.74 | **2,17×** |
+| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **843.83** | 385.06 | **2,19×** |
+| `linux-7.3.3.tar`(incremento de cambio local) | 1.6 GB | **8,014.15** | 1,361.72 | **5,89×** |
+| `linux-7.3.3/` (95.979 archivos pequeños) | 1.5 GB | **627.58** | 347.80 | **1,80×** |
+| **media geométrica** | — | **1,000.91** | 375.26 | **2,67×** |
 
 #### 2) Modo P2P de doble fuente frente a `rsync`
 
 | conjunto de datos | tamaño | `sync0` P2P de doble fuente<br>(Mbps) | `rsync`<br>(Mbps) | Aceleración (`sync0` / `rsync`) |
 | :--- | ---: | ---: | ---: | ---: |
-| `linux-7.3.3.tar.xz`(no comprimible) | 155 MB | **466.85** | 107.89 | **4,33×** |
-| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **992.17** | 506.62 | **1,96×** |
-| `linux-7.3.3.tar`(incremento de cambio local) | 1.6 GB | **5,666.84** | 1,169.49 | **4,85×** |
-| `linux-7.3.3/` (95.979 archivos pequeños) | 1.5 GB | **703.30** | 235.27 | **2,99×** |
-| **media geométrica** | — | **1,165.63** | 350.19 | **3,33×** |
+| `linux-7.3.3.tar.xz`(no comprimible) | 155 MB | **330.09** | 108.74 | **3,04×** |
+| `linux-7.3.3.tar`(comprimible) | 1.6 GB | **1,551.86** | 385.06 | **4,03×** |
+| `linux-7.3.3.tar`(incremento de cambio local) | 1.6 GB | **5,474.17** | 1,361.72 | **4,02×** |
+| `linux-7.3.3/` (95.979 archivos pequeños) | 1.5 GB | **706.56** | 347.80 | **2,03×** |
+| **media geométrica** | — | **1,186.42** | 375.26 | **3,16×** |
 
 > Nota: En el modo P2P de fuente dual, los nodos europeos `s1` colaboran para la siembra y el RTT de la red troncal transcontinental es de 65 ms.
 
