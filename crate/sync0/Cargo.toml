@@ -1,0 +1,25 @@
+[package]
+name = "sync0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "对等文件同步与 Dragonfly P2P 分发系统 / Peer-to-Peer File Sync & Dragonfly P2P Distribution System"
+readme = "../../README.md"
+
+[dependencies]
+clap_args = { version = "0.1.9", features = ["macro"] }
+log_init = "0.1.40"
+rusty_alloc_default = "0.1.5"
+s0_conf = { version = "0.1.2", path = "../s0_conf" }
+s0_const = { version = "0.1.2", path = "../s0_const" }
+s0_i18n = { version = "0.1.2", path = "../s0_i18n" }
+s0_peer = { version = "0.1.2", path = "../s0_peer" }
+s0_udp = { version = "0.1.2", path = "../s0_udp" }
+s0_wire = { version = "0.1.2", path = "../s0_wire" }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+tempfile = "3.27.0"

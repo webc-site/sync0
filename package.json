@@ -1,0 +1,16 @@
+{
+  "name": "sync0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@1-/mdt": "^0.1.12",
+    "@1-/tran": "^0.1.9",
+    "@3-/cargo_upgrade": "^0.1.4",
+    "@3-/lang": "^0.2.15",
+    "@3-/read": "^0.1.4",
+    "@3-/write": "^0.1.2",
+    "@3-/zx": "^0.1.18",
+    "js-yaml": "^5.5.0",
+    "yargs": "^18.2.0"
+  }
+}

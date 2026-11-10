@@ -1,0 +1,33 @@
+about: Vienādranga failu sinhronizācijas un vairāku mezglu izplatīšanas rīki
+send_about: Nosūtiet failu vai direktoriju
+recv_about: saņemt failu vai direktoriju
+id_about: Izvadiet vietējā mezgla adresi
+profile_about: Ģenerējiet un parakstiet personīgās mezgla vizītkartes
+share_about: Publicējiet vienu vai vairākas failu koplietošanas grupas
+pull_about: Izvelciet visus vai vairākus atlasītos failus un direktorijus no koplietošanas grupas
+push_about: Augšupielādējiet failus vai direktorijus koplietošanas grupā
+sub_about: Abonējiet koplietošanas grupas atjauninājumus un palīdziet izplatīšanā
+group_about: Pievienojieties vairāku mezglu divvirzienu sinhronizācijas grupai
+arg_file_or_dir: Fails vai direktorijs, kas jānosūta
+arg_peer_addr: mērķa mezgla adrese
+arg_listen_addr: klausīšanās adrese
+arg_out_path: Izvades faila vai direktorija ceļš
+arg_rate: Ātruma ierobežojums (baiti/sekundē)
+arg_delete: Dzēsiet liekos failus saņēmējā pusē
+arg_quiet: klusais režīms
+arg_share_name: Kopīgojiet grupas un ceļus
+arg_local_dir: vietējais direktorijs
+arg_dst_dir: mērķa direktoriju
+arg_src_dir: vietējā avota ceļš
+arg_peer_addrs_csv: Mezglu adrešu saraksts (atdalot ar komatu)
+arg_origin_addr: Avota mezgla adrese
+arg_subpath: Vairākas failu vai direktoriju ceļu atlases (atdalītas ar komatu)
+arg_auth: Iespējot piekļuves autentifikāciju
+arg_group_name: Grupas nosaukums un ceļš
+arg_config: Atslēgas un konfigurācijas direktorijs
+arg_name: lietotājvārds
+arg_region: Pilsētas vai rajona kods
+arg_email: Saziņas e-pasts
+arg_url: Personiskais URL
+arg_bio: Personalizēts paraksts (maksimums 256 rakstzīmes)
+err_prefix: kļūda

@@ -1,0 +1,33 @@
+about: Penyegerakan fail peer-to-peer dan alat pengedaran berbilang nod
+send_about: Hantar fail atau direktori
+recv_about: menerima fail atau direktori
+id_about: Keluarkan alamat nod setempat
+profile_about: Hasilkan dan tandatangani kad perniagaan nod peribadi
+share_about: Terbitkan satu atau lebih kumpulan perkongsian fail
+pull_about: Tarik semua atau berbilang fail dan direktori yang dipilih daripada kumpulan perkongsian
+push_about: Muat naik fail atau direktori ke kumpulan perkongsian
+sub_about: Langgan berkongsi kemas kini kumpulan dan bantu dalam pengedaran
+group_about: Sertai kumpulan penyegerakan dua hala berbilang nod
+arg_file_or_dir: Fail atau direktori untuk dihantar
+arg_peer_addr: alamat nod sasaran
+arg_listen_addr: alamat mendengar
+arg_out_path: Fail output atau laluan direktori
+arg_rate: Had kadar (bait/saat)
+arg_delete: Padamkan fail berlebihan pada bahagian penerima
+arg_quiet: mod senyap
+arg_share_name: Kongsi kumpulan dan laluan
+arg_local_dir: direktori tempatan
+arg_dst_dir: direktori sasaran
+arg_src_dir: laluan sumber tempatan
+arg_peer_addrs_csv: Senarai alamat nod (dipisahkan koma)
+arg_origin_addr: Alamat nod sumber
+arg_subpath: Pelbagai pilihan laluan fail atau direktori (dipisahkan koma)
+arg_auth: Dayakan pengesahan akses
+arg_group_name: Nama kumpulan dan laluan
+arg_config: Direktori kunci dan konfigurasi
+arg_name: nama pengguna
+arg_region: Kod bandar atau kawasan
+arg_email: E-mel hubungan
+arg_url: URL peribadi
+arg_bio: Tandatangan diperibadikan (maksimum 256 aksara)
+err_prefix: kesilapan

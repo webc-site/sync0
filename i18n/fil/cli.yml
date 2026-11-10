@@ -1,0 +1,33 @@
+about: Peer-to-peer na pag-synchronize ng file at mga tool sa pamamahagi ng multi-node
+send_about: Magpadala ng file o direktoryo
+recv_about: tumanggap ng file o direktoryo
+id_about: I-output ang lokal na node address
+profile_about: Bumuo at pumirma ng mga personal na node business card
+share_about: Mag-publish ng isa o higit pang mga grupo sa pagbabahagi ng file
+pull_about: Hilahin ang lahat o maramihang napiling mga file at direktoryo mula sa pagbabahagi ng grupo
+push_about: Mag-upload ng mga file o direktoryo sa isang pagbabahaging grupo
+sub_about: Mag-subscribe sa pagbabahagi ng mga update ng grupo at tumulong sa pamamahagi
+group_about: Sumali sa isang multi-node two-way synchronization group
+arg_file_or_dir: File o direktoryo na ipapadala
+arg_peer_addr: target na node address
+arg_listen_addr: address sa pakikinig
+arg_out_path: Output file o path ng direktoryo
+arg_rate: Limitasyon sa rate (bytes/segundo)
+arg_delete: Tanggalin ang mga redundant na file sa receiving end
+arg_quiet: silent mode
+arg_share_name: Magbahagi ng mga pangkat at landas
+arg_local_dir: lokal na direktoryo
+arg_dst_dir: target na direktoryo
+arg_src_dir: lokal na pinagmumulan ng landas
+arg_peer_addrs_csv: Listahan ng mga node address (pinaghihiwalay ng kuwit)
+arg_origin_addr: Address ng source node
+arg_subpath: Maramihang seleksyon ng mga landas ng file o direktoryo (pinaghihiwalay ng kuwit)
+arg_auth: Paganahin ang pagpapatunay ng pag-access
+arg_group_name: Pangalan at landas ng grupo
+arg_config: Direktoryo ng susi at pagsasaayos
+arg_name: username
+arg_region: Code ng lungsod o lugar
+arg_email: Makipag-ugnayan sa email
+arg_url: Personal na URL
+arg_bio: Personalized na lagda (maximum na 256 character)
+err_prefix: pagkakamali

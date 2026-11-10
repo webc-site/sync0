@@ -1,0 +1,21 @@
+[package]
+name = "s0_wire"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "sync0 紧凑二进制线协议、TACK 双层确认帧与 Ed25519 自签名节点名片编解码库"
+readme = "../../README.md"
+
+[dependencies]
+coarsetime = "0.1.38"
+ed25519-dalek = "3.0.0"
+s0_cdc = { version = "0.1.2", path = "../s0_cdc" }
+s0_const = { version = "0.1.2", path = "../s0_const" }
+strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.21"
+
+[dev-dependencies]
+aok = "0.1.18"
+ctor = "1.0.13"
+log_init = "0.1.40"

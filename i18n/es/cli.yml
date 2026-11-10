@@ -1,0 +1,33 @@
+about: Herramientas de distribución multinodo y sincronización de archivos punto a punto
+send_about: Enviar un archivo o directorio
+recv_about: recibir archivo o directorio
+id_about: Generar la dirección del nodo local
+profile_about: Generar y firmar tarjetas de visita de nodos personales.
+share_about: Publicar uno o más grupos para compartir archivos
+pull_about: Extraiga todos o varios archivos y directorios seleccionados del grupo para compartir
+push_about: Cargar archivos o directorios a un grupo para compartir
+sub_about: Suscríbase para compartir actualizaciones del grupo y ayudar en la distribución.
+group_about: Únase a un grupo de sincronización bidireccional de múltiples nodos
+arg_file_or_dir: Archivo o directorio a enviar
+arg_peer_addr: dirección del nodo objetivo
+arg_listen_addr: dirección de escucha
+arg_out_path: Ruta del archivo o directorio de salida
+arg_rate: Límite de velocidad (bytes/segundo)
+arg_delete: Eliminar archivos redundantes en el extremo receptor
+arg_quiet: modo silencioso
+arg_share_name: Compartir grupos y rutas
+arg_local_dir: directorio local
+arg_dst_dir: directorio de destino
+arg_src_dir: ruta de origen local
+arg_peer_addrs_csv: Lista de direcciones de nodos (separadas por comas)
+arg_origin_addr: Dirección del nodo de origen
+arg_subpath: Selección múltiple de rutas de archivos o directorios (separadas por comas)
+arg_auth: Habilitar la autenticación de acceso
+arg_group_name: Nombre y ruta del grupo
+arg_config: Directorio de claves y configuración
+arg_name: nombre de usuario
+arg_region: Código de ciudad o área
+arg_email: Correo electrónico de contacto
+arg_url: URL personal
+arg_bio: Firma personalizada (máximo 256 caracteres)
+err_prefix: error

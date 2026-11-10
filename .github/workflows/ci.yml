@@ -1,0 +1,97 @@
+name: CI & 4-Platform Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Bench (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            os: ubuntu-24.04
+            bin: target/release/sync0
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+            bin: target/release/sync0
+          - platform: macos
+            os: macos-15
+            bin: target/release/sync0
+          - platform: windows
+            os: windows-2025
+            bin: target/release/sync0.exe
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build release workspace
+        run: cargo build --release --workspace
+
+      - name: Run cross-platform test suite
+        run: cargo test --workspace
+
+      - name: Run 4-platform sync0 vs rsync benchmark (${{ matrix.platform }})
+        shell: bash
+        env:
+          GHA_PLATFORM: ${{ matrix.platform }}
+          SYNC0_BIN: ${{ matrix.bin }}
+        run: bun bench/gha_bench.js
+
+      - name: Upload binary & benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync0-${{ matrix.platform }}
+          path: |
+            ${{ matrix.bin }}
+            bench/gha-${{ matrix.platform }}.json
+
+  summary:
+    name: Build 4-Platform Matrix Summary
+    needs: build-and-test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Download 4-platform benchmark artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sync0-*
+          merge-multiple: true
+          path: gha_artifacts
+
+      - name: Generate 4-platform matrix & geometric mean summary
+        run: |
+          cp gha_artifacts/bench/gha-*.json bench/ 2>/dev/null || cp gha_artifacts/gha-*.json bench/ 2>/dev/null || true
+          bun bench/matrix.js
+          cat bench/report.md
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            cat bench/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
